@@ -1,0 +1,33 @@
+launched <SID3> (pairing: Big effort)
+  attach: fake attach <SID3>
+  starts waiting on: alex
+  permissions: bypass
+
+<SID2> is now waiting on: alex
+
+- <SID2> | general | idle | waiting on: alex | last: - | A task
+- <SID3> | pairing | idle | waiting on: alex | last: - | Big effort
+- <SID1> | pairing | idle | waiting on: alex | last: - | Shape the idea
+
+<SID1> (pairing: Shape the idea)
+  running: yes
+  permissions: bypass
+  waiting on: alex
+  attach: fake attach <SID1>
+  cwd: <WORK>
+  brief: <HOME>/state/sessions/<SID1>/brief.md
+  unhandled inbox messages: 0
+  recent events:
+    #1 launched (sc, 0s ago): pairing: Shape the idea
+
+<SID2> (general: A task)
+  running: yes
+  permissions: auto
+  waiting on: alex
+  attach: fake attach <SID2>
+  cwd: <WORK>
+  brief: <HOME>/state/sessions/<SID2>/brief.md
+  unhandled inbox messages: 0
+  recent events:
+    #1 launched (sc, 0s ago): general: A task
+    #2 marked (sc, 0s ago): told Alex about it

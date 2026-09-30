@@ -1,0 +1,2 @@
+general        starts waiting on agent   any other task; the task text says what to do and what is allowed
+investigate    starts waiting on agent   research or diagnose something and write a report (read-only)

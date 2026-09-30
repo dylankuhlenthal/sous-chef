@@ -1,0 +1,24 @@
+UNREAD EVENTS
+
+[<SID1>] general: Asks a question | waiting on: sc | attach: fake attach <SID1>
+  #2 needs-decision key=colour (session, 61m ago): red or blue? I recommend blue.
+
+[<SID3>] general: Held at a prompt | waiting on: alex | attach: fake attach <SID3>
+  #2 prompt-waiting (watcher, 60s ago): the session has been held for 60m by a prompt only a person can answer: permission prompt (approve Bash: ./scripts/db-reset.sh). It cannot continue until someone answers it in the session. Tell Alex which session it is and what it asks; Alex answers it with `fake attach <SID3>`. A message sent with `sc send` does not answer it: it waits behind the prompt.
+
+[<SID2>] general: Waits in its terminal | waiting on: alex | attach: fake attach <SID2>
+  #2 waiting (session, 61m ago): ready for you in the terminal
+
+[<SID4>] pairing: Shape and wait | waiting on: alex | attach: fake attach <SID4>
+  #2 auto-resumed (watcher, 0s ago): the session stopped by itself about 60s ago while waiting on alex, most likely because Claude Code stops a background session that has been idle for about an hour. The watcher resumed it with its conversation (automatic resume 1 of at most 24 in 24 hours) and sent it a message to restart anything tied to its old process. Nothing to do.
+
+OPEN QUESTIONS (listed until answered with --resolves, or resolved by the session)
+  [<SID1>] key=colour (#2, 61m ago): red or blue? I recommend blue.
+    answer: sc send <SID1> --resolves colour "..."
+
+After handling these, run: sc events ack <SID1>:2,<SID3>:2,<SID2>:2,<SID4>:2
+
+--- message 1 from watcher, 0s ago
+You were resumed by sous chef's watcher (event 2): this session stopped by itself while it was idle, most likely because Claude Code stops background sessions that stay idle for about an hour. Your conversation is intact, but anything tied to your old process has ended: a local server, a background command, a monitor. Restart what you still need; for example a local page server must be restarted, because it targets your old process. Then carry on as before. Sous chef still has you as waiting on alex, so do not report again unless your situation changed.
+
+After acting on a message, run: sc inbox ack <n>

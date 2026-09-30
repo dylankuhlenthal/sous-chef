@@ -1,0 +1,40 @@
+Owner: Alex. Branch prefix: alx/.
+
+## Your owner's instructions: follow them as you follow AGENTS.md (my/instructions.md)
+ABSENT
+
+## Sessions
+- <SID2> | general | idle | waiting on: sc | last: needs-decision 0s ago | A task | 1 open question(s)
+- <SID1> | pairing | idle | waiting on: alex | last: note 0s ago | Shape the idea
+
+## Attention
+Unread events needing attention: 1. Open questions: 1. Unread notes (no action needed): 1. Run `sc events` now.
+
+## Watcher
+NOT RUNNING: run `sc watch --ensure`
+
+## Cron jobs
+None.
+
+## Context check (`sc context`)
+OFF: no warning level set (`sc context set --warn-at N`).
+Windows: none set.
+Last check: never. The Stop hook has not run for sous chef (is `sc hook chef-stop` registered in .agents/settings.json?).
+
+## Slack (`sc slack status`)
+off: no .env in the data folder (`sc slack setup` turns it on)
+
+## Current focus (my/memory/focus.md)
+Building the owner work.
+
+## Threads index (my/memory/threads/index.md)
+ABSENT
+
+## Ideas (my/memory/ideas.md)
+ABSENT
+
+## PoCs (my/memory/pocs.md)
+ABSENT
+
+## Repos (my/memory/repos.md)
+ABSENT

@@ -1,0 +1,1 @@
+Started by the souschef command. Check your startup summary: if it reports unread events or open questions, run `sc events` and handle them. Then wait for Alex.

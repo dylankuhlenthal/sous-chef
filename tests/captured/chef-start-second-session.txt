@@ -1,0 +1,1 @@
+You are NOT sous chef. Session chef-1 holds that role and is still running, so it keeps it and receives the wake-ups. Do the task you were given and do not manage sessions or memory as sous chef does. If chef-1 is wedged and Alex wants this session to take over, Alex runs `sc chef --take` here.
