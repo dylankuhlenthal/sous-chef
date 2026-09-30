@@ -74,7 +74,7 @@ def is_data_folder(folder: Path) -> bool:
 
 
 def _check_link(data: Path) -> bool:
-    """True when `my` already points at `data`. Refuses a link that points elsewhere, and the old layout."""
+    """True when `my` already points at `data`. Refuses a link that points elsewhere."""
     link = util.DATA_LINK
     if link.is_symlink():
         target = Path(os.readlink(link)).expanduser()
@@ -84,9 +84,6 @@ def _check_link(data: Path) -> bool:
                            f"(rm {link}) and run setup again; the data behind it is not touched.")
     if link.exists():
         raise util.SCError(f"{link} exists and is not a link; move it away and run setup again")
-    if (util.CODE_ROOT / "memory").is_dir() and (util.CODE_ROOT / "state").is_dir():
-        raise util.SCError(f"{util.CODE_ROOT} still holds memory/ and state/ (the old layout, with code and data "
-                           f"in one folder); run the switch-over that moves the data into its own folder")
     return False
 
 

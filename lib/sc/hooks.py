@@ -134,8 +134,7 @@ def guard_edit(args) -> None:
         if path == own_report:
             return
     # Protect the state folder of the data folder and of the code folder. The code
-    # folder's state/ is the old layout's (and a test home's when tests point there);
-    # with no data folder, it is still guarded rather than failing open.
+    # folder's state/ is where hook errors are logged when there is no data folder (`run`).
     protected = {(util.CODE_ROOT / "state").resolve()}
     try:
         protected.add(util.state_dir().resolve())

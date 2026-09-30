@@ -29,9 +29,6 @@ def data_problem():
     if DATA_LINK.is_symlink():
         return (f"{DATA_LINK} points to {os.readlink(DATA_LINK)}, which does not exist; "
                 f"re-point it at your data folder: ln -sfn <data folder> {DATA_LINK}")
-    if (CODE_ROOT / "memory").is_dir() and (CODE_ROOT / "state").is_dir():
-        return (f"{CODE_ROOT} still holds memory/ and state/ (the old layout, with code and data in one folder); "
-                f"run the switch-over that moves the data into its own folder")
     return f"no data folder: run {install_script()}"
 
 

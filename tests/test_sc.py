@@ -535,13 +535,6 @@ class SetupTests(CodeCopyTestCase):
         self.assertEqual(os.readlink(self.code / "my"), str(other))
         self.assertFalse(self.data.exists())
 
-    def test_the_old_layout_is_refused(self):
-        (self.code / "memory").mkdir()
-        (self.code / "state").mkdir()
-        out = self.install("--name", "Sam", ok=False)
-        self.assertIn("the old layout", out.stderr)
-        self.assertFalse((self.code / "my").is_symlink())
-
     def test_install_names_the_tools_it_cannot_find(self):
         tools = Path(self.tmp.name) / "tools"
         tools.mkdir()
@@ -589,7 +582,7 @@ class OwnerInstructionsTests(ScTestCase):
 
 class DataLinkTests(CodeCopyTestCase):
     """Without SC_TEST_HOME, sous chef finds the owner's data through the `my` link in the code folder,
-    and refuses, saying what to run, when the link is missing or broken or the old layout is still there."""
+    and refuses, saying what to run, when the link is missing or broken."""
 
     def setUp(self):
         super().setUp()
@@ -620,13 +613,6 @@ class DataLinkTests(CodeCopyTestCase):
         out = self.copy_sc("sessions", env=self.env, ok=False)
         self.assertIn(f"no data folder: run {self.code.resolve()}/install.sh", out.stderr)
         self.assertFalse((self.code / "state").exists())
-
-    def test_the_old_layout_says_to_run_the_switch_over(self):
-        (self.code / "memory").mkdir()
-        (self.code / "state").mkdir()
-        out = self.copy_sc("sessions", env=self.env, ok=False)
-        self.assertIn("the old layout", out.stderr)
-        self.assertIn("switch-over", out.stderr)
 
     def test_help_and_the_hooks_work_without_a_data_folder(self):
         self.assertIn("usage", self.copy_sc("--help", env=self.env).stdout)

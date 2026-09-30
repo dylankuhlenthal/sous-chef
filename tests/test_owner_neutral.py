@@ -75,10 +75,6 @@ class OwnerNeutralTests(unittest.TestCase):
 # The owner's files. None may be tracked in the core, and the core's .gitignore lists each.
 PERSONAL = ("my", "state/", ".env", "memory/", "cron/", "context.json", "owner.json", "instructions.md",
             "worker-instructions.md", ".agents/settings.local.json")
-# Tracked on the build branch until the switch-over moves them to the owner's data repo
-# (or, for switch-over/, leaves them out of the core's first commit).
-BEFORE_THE_SWITCH = ("memory/", "cron/", "context.json", "owner.json", "switch-over/",
-                     "kinds/build.md", "kinds/mega-shape.md", "kinds/orchestrate.md", "kinds/shape.md")
 
 
 class CoreContentsTests(unittest.TestCase):
@@ -91,9 +87,7 @@ class CoreContentsTests(unittest.TestCase):
             self.assertEqual(out.returncode, 0, f"the core's .gitignore does not ignore {name}")
 
     def test_every_tracked_file_is_core(self):
-        """After the switch-over, everything tracked is core; before it, only the owner's known files are not."""
-        outside = [f for f in core_paths.listed_files(ROOT)
-                   if not core_paths.is_core(f) and not f.startswith(BEFORE_THE_SWITCH)]
+        outside = [f for f in core_paths.listed_files(ROOT) if not core_paths.is_core(f)]
         self.assertEqual(outside, [], "add these to the core path list (tests/core_paths.py) or the owner's data")
 
 

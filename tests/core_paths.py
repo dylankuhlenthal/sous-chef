@@ -1,12 +1,11 @@
 """The core's path list: which files belong to the shared sous chef code repo.
 
 Everything else in a sous chef folder is the owner's (their data folder, reached
-through the `my` link) or a one-off that never ships. The list is used by:
+through the `my` link). The list is used by:
 
   copy_code()       tests that run a copy of the code, holding only core files, so
                     they pass in the core as it is published (decision 0020)
   core_files()      the checks that no personal file and no owner's name is in the core
-  switch-over       stages the core's first commit from these paths
 
 Run: python3 -m unittest discover -s tests
 """
