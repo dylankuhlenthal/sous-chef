@@ -4,6 +4,7 @@ Run: python3 -m unittest discover -s tests
 """
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -1861,6 +1862,23 @@ class ResumeAndReleaseTests(ScTestCase):
         self.sc("cleanup", sid)
         reg = json.loads((self.home / "state" / "worktrees.json").read_text())
         self.assertIsNone(reg[str(wt.resolve())]["session"])
+
+    def test_entries_whose_folder_is_gone_are_dropped_unless_an_active_session_holds_them(self):
+        root = WorktreeTests.make_repo(self)
+        for name in ("kept", "held", "gone"):
+            self.sc("worktree", "--repo", str(root), "--branch", f"alx/{name}", "--dir", name, "--base", "main")
+        kept, held, gone = ((root / n).resolve() for n in ("kept", "held", "gone"))
+        sid = self.sc("spawn", "--kind", "general", "--title", "holds it", "--cwd", str(held),
+                      "--runtime", "fake", stdin="t").stdout.split()[1]
+        shutil.rmtree(held)
+        shutil.rmtree(gone)
+        self.sc("worktree", "--repo", str(root), "--branch", "alx/new", "--dir", "new", "--base", "main")
+        reg = json.loads((self.home / "state" / "worktrees.json").read_text())
+        self.assertEqual(sorted(reg), sorted(str(p) for p in (kept, held, (root / "new").resolve())))
+        self.assertEqual(reg[str(held)]["session"], sid)
+        self.sc("cleanup", sid)
+        reg = json.loads((self.home / "state" / "worktrees.json").read_text())
+        self.assertEqual(sorted(reg), sorted(str(p) for p in (kept, (root / "new").resolve())))
 
 
 class ResolvedWakesSousChefTests(ScTestCase):
