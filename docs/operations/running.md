@@ -146,7 +146,7 @@ To try the whole flow with real sessions without touching real state, make a thr
 
 | Symptom | Check |
 | --- | --- |
-| `sc` says "no data folder", "my points to ..., which does not exist" or "the old layout" | The `my` link in the core is missing, broken, or never made. Run `install.sh` (a new or existing data folder), re-point the link (`ln -sfn <data folder> ~/.sous-chef/my`), or run the switch-over, as the message says |
+| `sc` says "no data folder" or "my points to ..., which does not exist" | The `my` link in the core is missing, broken, or never made. Run `install.sh` (a new or existing data folder) or re-point the link (`ln -sfn <data folder> ~/.sous-chef/my`), as the message says |
 | `[sync] sync-stopped` in `sc events` | The watcher stopped pushing the data folder. After a conflict: rebase or merge by hand in the data folder (`git -C ~/.sous-chef/my status`); syncing starts again by itself once the checked-out commit changes. After failed pushes: usually offline; it starts again once a fetch works. `docs/domains/watcher.md`, check 9 |
 | Summary says the watcher is not running | `sc watch --ensure`, then `my/state/watch.log` |
 | Summary says the watcher is not on current code | `sc watch --ensure` replaces it and says what it did; if it could not, `my/state/watch.log`. A watcher on the current code restarts itself after a code change, so this means one started by older code, or new code that does not load (the log says which) |

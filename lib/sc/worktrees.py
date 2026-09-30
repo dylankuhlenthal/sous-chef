@@ -11,6 +11,10 @@ new branch and worktree there and records it in state/worktrees.json:
 That record is what lets `sc spawn` turn off Claude Code's background worktree
 isolation for a session: only a worktree sous chef created, and no other active
 session is using, counts as the session's own. Everywhere else the default stays.
+
+Every change to the record also drops entries whose folder no longer exists and
+that no active session holds (`_prune`), so worktrees removed by hand do not stay
+listed. An entry whose folder exists is never dropped.
 """
 import os
 import re
@@ -28,6 +32,19 @@ def _path():
 
 def registry() -> dict:
     return util.read_json(_path(), {}) or {}
+
+
+def _prune(data: dict) -> bool:
+    """Drop entries whose folder is gone and no active session holds. True if any were dropped.
+
+    Called with the lock held, before the record is written.
+    """
+    active = set(records.all_ids())
+    gone = [path for path, entry in data.items()
+            if not Path(path).exists() and entry.get("session") not in active]
+    for path in gone:
+        del data[path]
+    return bool(gone)
 
 
 def _git(*args, cwd=None) -> subprocess.CompletedProcess:
@@ -75,6 +92,7 @@ def create(repo: str, branch: str, dir_name: str, base: str = None) -> dict:
     entry = {"repo": str(root), "branch": branch, "base": base, "created_at": util.now(), "session": None}
     with util.locked(util.state_dir() / ".worktrees.lock"):
         data = registry()
+        _prune(data)
         data[str(target)] = entry
         util.write_json(_path(), data)
     return {"path": str(target), "branch": branch, "base": base, "env_linked": linked,
@@ -90,7 +108,8 @@ def release(sid: str) -> None:
             if entry.get("session") == sid:
                 entry["session"] = None
                 changed = True
-        if changed:
+        # After freeing it: the session is still active while it is cleaned up.
+        if _prune(data) or changed:
             util.write_json(_path(), data)
 
 
@@ -103,6 +122,8 @@ def claim_for(cwd: str, sid: str) -> bool:
     key = str(Path(cwd).resolve())
     with util.locked(util.state_dir() / ".worktrees.lock"):
         data = registry()
+        if _prune(data):
+            util.write_json(_path(), data)
         entry = data.get(key)
         if entry is None:
             return False
