@@ -1,6 +1,5 @@
 // `sc`: the sous chef command line. Run `sc --help` or `sc <command> --help`.
 
-import fs from "node:fs";
 import path from "node:path";
 import { ArgExit, Command, parse, Parsed } from "./args.js";
 import * as chef from "./chef.js";
@@ -12,7 +11,7 @@ import * as inbox from "./inbox.js";
 import { print, printErr, readStdin, stdinIsTty } from "./io.js";
 import * as kinds from "./kinds.js";
 import * as ops from "./ops.js";
-import { commas, Dict, fixed, get, isFile, or, sorted, truthy } from "./py.js";
+import { commas, Dict, fixed, get, isFile, or, readText, sorted, truthy } from "./py.js";
 import * as records from "./records.js";
 import * as runtimes from "./runtimes/index.js";
 import * as setup from "./setup.js";
@@ -30,7 +29,7 @@ function s(args: Args, key: string): string | null {
 }
 
 async function readTask(args: Args): Promise<string> {
-  if (args.task_file) return fs.readFileSync(String(args.task_file), "utf8");
+  if (args.task_file) return readText(String(args.task_file));
   if (!stdinIsTty()) return readStdin();
   return "";
 }

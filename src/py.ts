@@ -300,6 +300,16 @@ export function expanduser(p: string): string {
   return p;
 }
 
+/** Python's universal newlines: "\r\n" and a lone "\r" read as "\n", as text-mode reads do. */
+export function universalNewlines(text: string): string {
+  return text.replace(/\r\n?/g, "\n");
+}
+
+/** Path.read_text() and open(p).read(): the file as UTF-8 text, with universal newlines. */
+export function readText(p: string): string {
+  return universalNewlines(fs.readFileSync(p, "utf8"));
+}
+
 /**
  * pathlib.Path(p) as a string: repeated slashes collapsed, "." parts and a trailing slash
  * dropped, ".." kept. Path("") is ".".
@@ -313,35 +323,68 @@ export function pathStr(p: string): string {
   return joined || ".";
 }
 
-/** Path.resolve(): absolute, with symlinks followed even where the path does not exist yet. */
+/**
+ * Path.resolve(): absolute, with symlinks followed even where the path does not exist yet.
+ *
+ * A port of Python 3.11's posixpath.realpath (strict=False): parts are taken one at a
+ * time, each symlink is replaced by its target (also one that points at nothing yet),
+ * and ".." is applied after the links before it are followed. A part that does not
+ * exist is kept as written. A symlink loop leaves the rest of the path as written.
+ */
 export function resolvePath(p: string): string {
-  const abs = path.isAbsolute(p) ? p : path.join(process.cwd(), p);
-  const parts = abs.split("/").filter((x) => x && x !== ".");
-  let current = "/";
-  for (let i = 0; i < parts.length; i++) {
-    const part = parts[i]!;
-    if (part === "..") {
-      current = path.dirname(current);
+  const abs = p.startsWith("/") ? p : `${process.cwd()}/${p}`;
+  const [result] = joinRealpath("", abs, new Map());
+  return result || "/";
+}
+
+function joinRealpath(start: string, rest: string, seen: Map<string, string | null>): [string, boolean] {
+  let current = start;
+  if (rest.startsWith("/")) {
+    rest = rest.slice(1);
+    current = "/";
+  }
+  const join = (a: string, b: string) => (a === "" ? b : a.endsWith("/") ? a + b : `${a}/${b}`);
+  while (rest) {
+    const slash = rest.indexOf("/");
+    const name = slash === -1 ? rest : rest.slice(0, slash);
+    rest = slash === -1 ? "" : rest.slice(slash + 1);
+    if (!name || name === ".") continue;
+    if (name === "..") {
+      if (current) {
+        const head = current === "/" ? "/" : path.dirname(current);
+        const tail = current === "/" ? "" : path.basename(current);
+        current = tail === ".." ? join(join(head, ".."), "..") : head;
+      } else {
+        current = "..";
+      }
       continue;
     }
-    const next = current === "/" ? `/${part}` : `${current}/${part}`;
-    let real: string | null = null;
+    const next = join(current, name);
+    let isLink = false;
     try {
-      real = fs.realpathSync(next);
+      isLink = fs.lstatSync(next).isSymbolicLink();
     } catch {
-      real = null;
+      isLink = false;
     }
-    if (real === null) {
-      // From the first part that does not exist, the rest is taken as written.
-      let rest = next;
-      for (const later of parts.slice(i + 1)) {
-        rest = later === ".." ? path.dirname(rest) : `${rest}/${later}`;
+    if (!isLink) {
+      current = next;
+      continue;
+    }
+    if (seen.has(next)) {
+      const known = seen.get(next);
+      if (known !== null && known !== undefined) {
+        current = known;
+        continue;
       }
-      return rest;
+      return [rest ? join(next, rest) : next, false]; // a symlink loop
     }
-    current = real;
+    seen.set(next, null);
+    const [resolved, ok] = joinRealpath(current, fs.readlinkSync(next), seen);
+    if (!ok) return [rest ? join(resolved, rest) : resolved, false];
+    current = resolved;
+    seen.set(next, current);
   }
-  return current;
+  return [current, true];
 }
 
 /** Whether `parent` is one of Path(child).parents (both already resolved or written the same way). */

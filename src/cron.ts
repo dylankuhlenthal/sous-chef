@@ -37,7 +37,7 @@ import * as events from "./events.js";
 import * as kinds from "./kinds.js";
 import { withLock } from "./lock.js";
 import * as ops from "./ops.js";
-import { Dict, exists, get, glob, isDir, isFile, or, stem, strip, truthy } from "./py.js";
+import { Dict, exists, get, glob, isDir, isFile, or, readText, stem, strip, truthy } from "./py.js";
 import * as records from "./records.js";
 import * as runtimes from "./runtimes/index.js";
 import { home, now, readJson, render, requireOwner, SCError, stateDir, templatesDir, writeJson } from "./util.js";
@@ -142,7 +142,7 @@ function jobPath(name: string): string {
 export function load(name: string): Job {
   const p = jobPath(name);
   if (!isFile(p)) throw new SCError(`no cron job '${name}' (see: sc cron list)`);
-  const [meta, body] = kinds.parse(fs.readFileSync(p, "utf8"));
+  const [meta, body] = kinds.parse(readText(p));
   return validate({ ...meta, name, task: body });
 }
 
@@ -267,7 +267,7 @@ function message(job: Job): string {
 }
 
 function workerTask(job: Job): string {
-  let note = fs.readFileSync(path.join(templatesDir(), "cron-worker.md"), "utf8");
+  let note = readText(path.join(templatesDir(), "cron-worker.md"));
   note = render(note, { job: job.name, owner: requireOwner().name });
   return `${strip(job.task)}\n\n${strip(note)}`;
 }

@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { dumps, JSONDecodeError, loads } from "./pyjson.js";
-import { floordiv, isprintable, isspace, isSymlink, exists, isFile, parseFloatPy, pathStr, rstrip, strip } from "./py.js";
+import { exists, floordiv, isFile, isprintable, isspace, isSymlink, parseFloatPy, pathStr, readText, rstrip, strip } from "./py.js";
 
 // Code (kinds, templates, bin) comes from this checkout, the core. The owner's data
 // (state, memory, cron jobs, their own kinds and settings) lives in their data folder,
@@ -192,7 +192,7 @@ const COMMENT = /<!--[\s\S]*?-->/g;
 
 /** An owner's instructions file with its <!-- comments --> left out, stripped; "" when there is none. */
 export function ownerText(p: string): string {
-  return isFile(p) ? strip(fs.readFileSync(p, "utf8").replace(COMMENT, "")) : "";
+  return isFile(p) ? strip(readText(p).replace(COMMENT, "")) : "";
 }
 
 const PLACEHOLDER = /\{\{(\w+)\}\}/gu;
@@ -248,7 +248,7 @@ export function slug(text: string, limit = 32): string {
 export function readJson<T = unknown>(p: string, dflt: T | null = null): T | null {
   let text: string;
   try {
-    text = fs.readFileSync(p, "utf8");
+    text = readText(p);
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === "ENOENT") return dflt;
     throw e;

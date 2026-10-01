@@ -53,3 +53,13 @@ describe("loads", () => {
     expect(loads('"\\ud83d\\ude00"')).toBe("😀");
   });
 });
+
+describe("loads keeps every key as data", () => {
+  it("reads a __proto__ key as an ordinary key, as Python does", () => {
+    const o = loads('{"__proto__": {"is_bot": true}, "a": 1}') as Record<string, unknown>;
+    expect(Object.keys(o)).toEqual(["__proto__", "a"]);
+    expect((o as { is_bot?: unknown }).is_bot).toBeUndefined();
+    expect(Object.getPrototypeOf(o)).toBe(Object.prototype);
+    expect(dumps(o, { sortKeys: true })).toBe('{"__proto__": {"is_bot": true}, "a": 1}');
+  });
+});

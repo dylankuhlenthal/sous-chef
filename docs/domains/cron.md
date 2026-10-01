@@ -98,7 +98,7 @@ Each message is on disk and visible, and none is lost.
 
 ## Missed firings
 
-Jobs are missed whenever sous chef is not running (the owner's rule: jobs only run while sous chef does). `cron.tick` checks the registered sous chef session is running (`chef.live_incumbent`) before firing anything; if it is not, nothing is marked as handled, and the watcher log says so once per job.
+Jobs are missed whenever sous chef is not running (the owner's rule: jobs only run while sous chef does). `cron.tick` checks the registered sous chef session is running (`chef.liveIncumbent`) before firing anything; if it is not, nothing is marked as handled, and the watcher log says so once per job.
 
 When sous chef is back, a job that missed one or more slots **fires once** (the owner's ruling). Only the latest slot is compared with the last one handled, so a job missed for three days fires once, not six times. For an email check, one catch-up run reads everything that arrived meanwhile, and six runs would only repeat it.
 

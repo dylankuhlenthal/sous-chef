@@ -7,14 +7,13 @@ import * as events from "./events.js";
 import * as inbox from "./inbox.js";
 import * as kinds from "./kinds.js";
 import { run } from "./proc.js";
-import { Dict, expanduser, isDir, isUnder, resolvePath, shellQuote, sorted, strip, truthy } from "./py.js";
+import { Dict, expanduser, isDir, isUnder, readText, resolvePath, shellQuote, sorted, strip, truthy } from "./py.js";
 import * as records from "./records.js";
 import { Rec } from "./records.js";
 import * as runtimes from "./runtimes/index.js";
 import { Runtime, WakeError } from "./runtimes/index.js";
 import {
-  archiveDir, CODE_ROOT, home, mkdirs, now, owner, ownerName, ownerPath, ownerProblem, ownerText, render,
-  requireOwner, SCError, scBin, sleep, templatesDir, userKindsDir, WAITING_VALUES as UTIL_WAITING_VALUES, writeJson,
+  archiveDir, CODE_ROOT, envFloat, home, mkdirs, now, owner, ownerName, ownerPath, ownerProblem, ownerText, render, requireOwner, scBin, SCError, sleep, templatesDir, userKindsDir, WAITING_VALUES as UTIL_WAITING_VALUES, writeJson,
 } from "./util.js";
 import type { Owner } from "./util.js";
 import * as worktrees from "./worktrees.js";
@@ -87,7 +86,7 @@ function ownerInstructionsSection(): string {
 }
 
 function renderBrief(rec: Rec, kind: kinds.Kind, task: string): string {
-  const template = fs.readFileSync(path.join(templatesDir(), "worker-brief.md"), "utf8");
+  const template = readText(path.join(templatesDir(), "worker-brief.md"));
   const ownerName_ = requireOwner().name;
   const values: Record<string, string> = {
     owner: ownerName_,
@@ -248,8 +247,7 @@ export async function currentSessionRecord(): Promise<Rec> {
     throw new SCError("this command only works inside a Claude Code session launched by sous chef " +
       "(CLAUDE_CODE_SESSION_ID is not set)");
   }
-  const wait = process.env.SC_IDENTITY_WAIT;
-  const deadline = Date.now() / 1000 + (wait === undefined ? 25 : Number(wait));
+  const deadline = Date.now() / 1000 + envFloat("SC_IDENTITY_WAIT", 25);
   let rec: Rec | null;
   for (;;) {
     rec = records.findByClaudeSession(claudeSid);

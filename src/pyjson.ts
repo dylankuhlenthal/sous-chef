@@ -169,7 +169,8 @@ function scanObject(doc: string, pos: number): [unknown, number] {
     if (doc[pos] !== ":") fail("Expecting ':' delimiter", doc, pos);
     pos = skip(doc, pos + 1);
     const [value, afterValue] = scanValue(doc, pos);
-    out[key] = value;
+    // defineProperty, so a "__proto__" key is an ordinary key, as in Python, not the prototype.
+    Object.defineProperty(out, key, { value, enumerable: true, writable: true, configurable: true });
     pos = skip(doc, afterValue);
     if (doc[pos] === "}") return [out, pos + 1];
     if (doc[pos] !== ",") fail("Expecting ',' delimiter", doc, pos);

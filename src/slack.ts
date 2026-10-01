@@ -29,10 +29,7 @@ import * as cron from "./cron.js";
 import * as events from "./events.js";
 import { withLock } from "./lock.js";
 import { JSONDecodeError } from "./pyjson.js";
-import {
-  Dict, expanduser, get, isDict, isFile, isspace, isUnder, len, or, parseFloatPy, parseIntPy, partition,
-  resolvePath, rpartition, rstrip, slice, sorted, splitlines, strip, truthy,
-} from "./py.js";
+import { Dict, expanduser, get, isDict, isFile, isspace, isUnder, len, or, parseFloatPy, parseIntPy, partition, readText, resolvePath, rpartition, rstrip, slice, sorted, splitlines, strip, truthy } from "./py.js";
 import * as records from "./records.js";
 import * as relay from "./relay.js";
 import { RelayError } from "./relay.js";
@@ -90,7 +87,7 @@ export function config(): SlackConfig | null {
     throw new SCError(`${p} can be read by others (mode ${mode.toString(8)}), so Slack stays off until it is ` +
       `fixed: chmod 600 ${p}`);
   }
-  const values = parseEnv(fs.readFileSync(p, "utf8"));
+  const values = parseEnv(readText(p));
   const missing = KEYS.filter((k) => !values[k]);
   if (missing.length) {
     throw new SCError(`${p} is missing ${missing.join(", ")}, so Slack is off; \`sc slack setup\` writes all three`);
@@ -120,7 +117,7 @@ export async function setup(url: string, keyFile: string, user: string): Promise
   if (!USER_ID.test(user)) throw new SCError(`'${user}' is not a Slack user id (they look like U0123ABCDE)`);
   let text: string;
   try {
-    text = fs.readFileSync(expanduser(keyFile), "utf8");
+    text = readText(expanduser(keyFile));
   } catch (e) {
     throw new SCError(`could not read the key file: ${osErrorText(e, expanduser(keyFile))}`);
   }
@@ -618,7 +615,7 @@ export function slackMeSection(rel: string): string | null {
   if (!isUnder(p, resolvePath(memoryDir()))) return null; // only files under memory/, whatever a job definition says
   let lines: string[];
   try {
-    lines = splitlines(fs.readFileSync(p, "utf8"));
+    lines = splitlines(readText(p));
   } catch {
     return null;
   }

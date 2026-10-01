@@ -327,15 +327,18 @@ export async function onStop(data: Dict): Promise<void> {
       writeJson(statePath(), st);
       return;
     }
+    let reading: ReturnType<typeof check> | null = null;
     try {
       if (!sessionId) throw new ReadError("the Stop hook payload has no session_id");
-      const reading = check(sessionId, findTranscript(sessionId, get<string | null>(data, "transcript_path", null)));
-      await read(st, reading, cfg);
+      reading = check(sessionId, findTranscript(sessionId, get<string | null>(data, "transcript_path", null)));
     } catch (e) {
       if (e instanceof ReadError) await failed(st, e.message, cfg);
       else await failed(st, `the check itself failed (${(e as Error).name ?? "Error"}: ${(e as Error).message ?? e})`,
         cfg);
     }
+    // Outside the try, as Python's else: a failure while recording a good reading is the
+    // hook's own error (state/hook-errors.log), not a reading the check could not make.
+    if (reading !== null) await read(st, reading, cfg);
     writeJson(statePath(), st);
   });
 }

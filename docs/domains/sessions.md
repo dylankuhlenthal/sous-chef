@@ -76,10 +76,10 @@ A session launched by a scheduled job gets `templates/cron-worker.md` added afte
 
 ## Launching
 
-`ops.spawn` refuses an unknown kind, an empty task, a working directory that does not exist, a working directory inside the core (a session there would load sous chef's own `AGENTS.md` and hooks) or the data folder, and a kind whose skill the runtime says is missing ("Skills" above). The two working directory checks are `ops.check_cwd`, which `sc cron add` also runs for a worker job, along with the skill check. It then saves the record and brief, appends `launched`, and calls the runtime's `launch` with:
+`ops.spawn` refuses an unknown kind, an empty task, a working directory that does not exist, a working directory inside the core (a session there would load sous chef's own `AGENTS.md` and hooks) or the data folder, and a kind whose skill the runtime says is missing ("Skills" above). The two working directory checks are `ops.checkCwd`, which `sc cron add` also runs for a worker job, along with the skill check. It then saves the record and brief, appends `launched`, and calls the runtime's `launch` with:
 
 - **Environment** (`ops.workerEnv`): only `PATH`, with `bin/` added at the front when it is not already there, as a convenience. Nothing depends on it, because a background session can run with an earlier launch's environment (see below).
-- **Settings** (`ops.worker_settings`): the hooks below, plus `"worktree": {"bgIsolation": "none"}` when the session runs in a worktree sous chef created for it.
+- **Settings** (`ops.workerSettings`): the hooks below, plus `"worktree": {"bgIsolation": "none"}` when the session runs in a worktree sous chef created for it.
 - **Hooks**: a PreToolUse hook runs `sc hook guard-edit`, which denies the file-editing tools under `my/state/` except the session's own `report.md`, so one session cannot hand-edit another's records. SessionStart runs `sc hook worker-start` (reminds a resumed or compacted session of its brief and unread messages), UserPromptSubmit runs `sc hook worker-prompt`, and Stop runs `sc hook worker-stop` (both record turn times for the watcher). Hooks are passed at launch, so nothing is written into the repo the session works in.
 
 If launching fails, a `failed` event is appended and the error is shown.

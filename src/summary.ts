@@ -11,13 +11,12 @@
 // Paths in headings are written as sous chef reaches them from its folder: my/...
 // Caps count characters (code points), as Python did.
 
-import fs from "node:fs";
 import path from "node:path";
 import * as context from "./context.js";
 import * as cron from "./cron.js";
 import * as events from "./events.js";
 import * as inbox from "./inbox.js";
-import { Dict, isDict, isFile, len, slice, strip } from "./py.js";
+import { Dict, isDict, isFile, len, readText, slice, strip } from "./py.js";
 import * as records from "./records.js";
 import * as runtimes from "./runtimes/index.js";
 import { Listing } from "./runtimes/index.js";
@@ -119,7 +118,7 @@ async function watcherLine(): Promise<string> {
 
 /** One file in full under a heading naming it as `shown`, cut at `cap` characters saying where the rest is. */
 function fileSection(title: string, p: string, shown: string, cap: number,
-                     read: (p: string) => string = (x) => strip(fs.readFileSync(x, "utf8"))): string {
+                     read: (p: string) => string = (x) => strip(readText(x))): string {
   if (!isFile(p)) return `## ${title} (${shown})\nABSENT`;
   let text = read(p);
   if (len(text) > cap) text = slice(text, 0, cap) + `\n[... cut at ${cap} characters; read ${shown} for the rest]`;

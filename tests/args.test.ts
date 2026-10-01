@@ -94,6 +94,7 @@ describe("parsing", () => {
     expect(run("context", "--warn-at", "70", "--window", "a=1", "--window", "b=2").parsed).toMatchObject(
       { warn_at: 70, window: ["a=1", "b=2"] });
     expect(run("status", "x", "-n5").parsed).toMatchObject({ n: 5 });
+    expect(run("status", "x", "-n=5").parsed).toMatchObject({ n: 5 });
     expect(run("status", "x").parsed).toMatchObject({ n: 10 });
   });
   it("takes - as text, and fills optional positionals with their defaults", () => {

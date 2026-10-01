@@ -7,7 +7,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { Dict, expanduser, isDir, isFile, listDir, partition, resolvePath, splitlines, strip } from "../py.js";
+import { Dict, expanduser, isDir, isFile, listDir, partition, readText, resolvePath, splitlines, strip } from "../py.js";
 
 /**
  * Claude Code's managed settings folder, per platform (read from Claude Code 2.1.285's
@@ -53,10 +53,10 @@ function repoRoot(start: string): string | null {
 function mainCheckout(worktree: string): string | null {
   let common: string;
   try {
-    let gitdir = strip(fs.readFileSync(path.join(worktree, ".git"), "utf8"));
+    let gitdir = strip(readText(path.join(worktree, ".git")));
     if (!gitdir.startsWith("gitdir:")) return null;
     gitdir = resolvePath(path.resolve(worktree, strip(gitdir.slice("gitdir:".length))));
-    common = resolvePath(path.resolve(gitdir, strip(fs.readFileSync(path.join(gitdir, "commondir"), "utf8"))));
+    common = resolvePath(path.resolve(gitdir, strip(readText(path.join(gitdir, "commondir")))));
   } catch {
     return null;
   }
@@ -99,7 +99,7 @@ function pluginDirs(config: string): string[] {
   const plugins = path.join(config, "plugins");
   const dirs = new Set<string>([...globDirs(path.join(plugins, "cache"), 3), ...globDirs(path.join(plugins, "synced"), 2)]);
   try {
-    const installed = JSON.parse(fs.readFileSync(path.join(plugins, "installed_plugins.json"), "utf8")) as Dict;
+    const installed = JSON.parse(readText(path.join(plugins, "installed_plugins.json"))) as Dict;
     const byName = installed.plugins ?? {};
     if (typeof byName === "object" && byName !== null && !Array.isArray(byName)) {
       for (const entries of Object.values(byName as Dict)) {
@@ -119,7 +119,7 @@ function pluginDirs(config: string): string[] {
 function frontMatterName(skillMd: string): string | null {
   let text: string;
   try {
-    text = fs.readFileSync(skillMd, "utf8");
+    text = readText(skillMd);
   } catch {
     return null;
   }

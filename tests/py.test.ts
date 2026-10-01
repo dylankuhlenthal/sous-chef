@@ -5,7 +5,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   commas, fixed, floatRepr, isprintable, len, parseFloatPy, parseIntPy, pathStr, repr, resolvePath, shellQuote, slice,
-  splitlines, splitWs, strip, truthy,
+  readText, splitlines, splitWs, strip, truthy,
 } from "../src/py.js";
 
 const tmps: string[] = [];
@@ -98,5 +98,44 @@ describe("numbers", () => {
     expect(parseFloatPy("1e3")).toBe(1000);
     expect(parseFloatPy("inf")).toBe(Infinity);
     expect(parseFloatPy("x")).toBeNull();
+  });
+});
+
+describe("resolvePath, against what Python's Path.resolve() gave", () => {
+  it("follows a dangling link, applies .. after links, and resolves relative paths the same way", () => {
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "resolve-")));
+    try {
+      fs.mkdirSync(path.join(root, "real", "sub"), { recursive: true });
+      fs.mkdirSync(path.join(root, "a"));
+      fs.symlinkSync(path.join(root, "state", "new.json"), path.join(root, "dl"));
+      fs.symlinkSync("../real", path.join(root, "a", "link"));
+      // Python 3.11: Path(p).resolve() for each, with cwd = root.
+      expect(resolvePath(path.join(root, "dl"))).toBe(path.join(root, "state", "new.json"));
+      expect(resolvePath(`${root}/a/link/sub/../x`)).toBe(path.join(root, "real", "x"));
+      expect(resolvePath(`${root}/a/link/..`)).toBe(root);
+      const cwd = process.cwd();
+      process.chdir(root);
+      try {
+        expect(resolvePath("dl")).toBe(path.join(root, "state", "new.json"));
+        expect(resolvePath("a/link/../real")).toBe(path.join(root, "real"));
+        expect(resolvePath("nonexist/../z")).toBe(path.join(root, "z"));
+      } finally {
+        process.chdir(cwd);
+      }
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("readText", () => {
+  it("reads CRLF and CR line ends as LF, as Python's text mode does", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "text-"));
+    try {
+      fs.writeFileSync(path.join(dir, "k.md"), "---\r\ndescription: x\r\n---\rbody\n");
+      expect(readText(path.join(dir, "k.md"))).toBe("---\ndescription: x\n---\nbody\n");
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

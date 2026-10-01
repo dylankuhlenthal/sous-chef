@@ -3,11 +3,13 @@
 // Writing to a pipe is asynchronous in Node, so nothing here ever exits the process
 // right after printing: commands return their exit code and the process ends by itself.
 
-/** Everything on stdin, read to its end (sys.stdin.read()). */
+import { universalNewlines } from "./py.js";
+
+/** Everything on stdin, read to its end (sys.stdin.read(): text mode, so universal newlines). */
 export async function readStdin(): Promise<string> {
   const chunks: Buffer[] = [];
   for await (const chunk of process.stdin) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-  return Buffer.concat(chunks).toString("utf8");
+  return universalNewlines(Buffer.concat(chunks).toString("utf8"));
 }
 
 /** Whether stdin is a terminal (sys.stdin.isatty()). */

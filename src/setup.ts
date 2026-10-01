@@ -27,9 +27,7 @@ import { createInterface, Interface } from "node:readline/promises";
 import { print, stdinIsTty } from "./io.js";
 import { run } from "./proc.js";
 import { dumps, JSONDecodeError, loads } from "./pyjson.js";
-import {
-  capitalize, Dict, exists, expanduser, isDict, isSymlink, listDir, pathStr, resolvePath, splitWs, stem, strip,
-} from "./py.js";
+import { capitalize, Dict, exists, expanduser, isDict, isSymlink, listDir, pathStr, readText, resolvePath, splitWs, stem, strip } from "./py.js";
 import { CODE_ROOT, DATA_LINK, ownerProblem, SCError, slug, writeJson } from "./util.js";
 
 export const DEFAULT_DATA = "~/.my-sous-chef";
@@ -169,7 +167,7 @@ function linkBin(binDir: string, say: (s: string) => void): void {
 function allowDataFolder(data: string): void {
   let settings: Dict;
   try {
-    settings = exists(SETTINGS_LOCAL) ? (loads(fs.readFileSync(SETTINGS_LOCAL, "utf8")) as Dict) : {};
+    settings = exists(SETTINGS_LOCAL) ? (loads(readText(SETTINGS_LOCAL)) as Dict) : {};
   } catch (e) {
     if (e instanceof JSONDecodeError) {
       throw new SCError(`${SETTINGS_LOCAL} is not valid JSON (${e.message}); fix or remove it and run setup again`);
@@ -232,7 +230,7 @@ async function setup(args: SetupArgs, ask: Asker): Promise<number> {
     writeOwner(data, name, prefix);
     say(`wrote ${path.join(data, "owner.json")}`);
   }
-  const ownerData = loads(fs.readFileSync(path.join(data, "owner.json"), "utf8")) as Dict;
+  const ownerData = loads(readText(path.join(data, "owner.json"))) as Dict;
   const ownerLower = strip(String(ownerData.name ?? "me")).toLowerCase();
 
   if (made) {

@@ -34,7 +34,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { withLock } from "./lock.js";
 import { dumps, loads } from "./pyjson.js";
-import { Dict, isFile, or, rpartition, strip } from "./py.js";
+import { Dict, isFile, or, readText, rpartition, strip } from "./py.js";
 import * as records from "./records.js";
 import { now, owner, Owner, readJson, SCError, stateDir, writeJson } from "./util.js";
 
@@ -131,7 +131,7 @@ export function readAll(sid: string): Event[] {
   if (!isFile(p)) return [];
   const out: Event[] = [];
   // Python reads the file line by line, splitting on "\n" only.
-  for (const raw of fs.readFileSync(p, "utf8").split(/(?<=\n)/)) {
+  for (const raw of readText(p).split(/(?<=\n)/)) {
     const line = strip(raw);
     if (line) out.push(loads(line) as Event);
   }

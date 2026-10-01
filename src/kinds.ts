@@ -27,9 +27,8 @@
 // available and refuses when it is definitely missing (ops.checkSkill).
 // Run `sc kinds` for the kinds that exist; no list of them lives in code.
 
-import fs from "node:fs";
 import path from "node:path";
-import { glob, isFile, isspace, partition, resolvePath, sorted, splitlines, stem, strip } from "./py.js";
+import { glob, isFile, isspace, partition, readText, resolvePath, sorted, splitlines, stem, strip } from "./py.js";
 import { PERMISSIONS } from "./runtimes/types.js";
 import { kindsDir, owner, Owner, render, SCError, userKindsDir } from "./util.js";
 
@@ -89,7 +88,7 @@ export function load(name: string): Kind {
   const found = find(name);
   if (!found) throw new SCError(`unknown kind '${name}' (known: ${names().join(", ")})`);
   const [source, p, replacesCore] = found;
-  const [meta, body] = parse(fs.readFileSync(p, "utf8"));
+  const [meta, body] = parse(readText(p));
   let waiting = get(meta, "starts_waiting_on") ?? "agent";
   let o: Owner | null;
   try {

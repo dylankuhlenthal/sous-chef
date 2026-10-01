@@ -268,7 +268,7 @@ function parseArgs(args: Arg[], argv: string[], out: (s: string) => void,
     }
     let name = token;
     let explicit: string | null = null;
-    if (token.startsWith("--") && token.includes("=")) {
+    if (token.includes("=") && (token.startsWith("--") || flags.has(token.slice(0, token.indexOf("="))))) {
       name = token.slice(0, token.indexOf("="));
       explicit = token.slice(token.indexOf("=") + 1);
     } else if (!token.startsWith("--") && token.length > 2 && !flags.has(token)) {

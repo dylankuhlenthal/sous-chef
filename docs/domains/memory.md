@@ -47,7 +47,7 @@ The whole summary is capped at `TOTAL_CAP` (42,000 characters, roughly 10,500 to
 0. Before anything that needs the data folder: if the code folder is a git worktree of the core, tells the session it is not sous chef (`chef.worktreeOfHome`); if there is no usable data folder, says what to run and stops (`util.homeProblem`).
 1. Checks whether another session already holds the role and is still running (`chef.liveIncumbent`). If so it stops here, telling this session it is not sous chef and naming the one that is. Wake-ups follow the registration, so taking it from a running owner would leave that session unheard.
 2. Otherwise registers the session in `my/state/chef.json` (`chef.register`), so wake-ups reach whichever session is sous chef now.
-3. Starts the watcher if it is not running, or replaces it if it is not on the current code (`watch.ensure`); the summary gets a note when it replaced one or could not. Replacing waits for the old watcher to finish a cycle, so this step can take up to about 45 seconds, inside the hook's 60-second timeout.
+3. Starts the watcher if it is not running, or replaces it if it is not on the current code (`ensure` in `src/watch.ts`); the summary gets a note when it replaced one or could not. Replacing waits for the old watcher to finish a cycle, so this step can take up to about 55 seconds (30 to see the old watcher finish a cycle, 10 for it to let go of the lock, 15 for the new one to start), inside the hook's 60-second timeout.
 4. On `startup`, notes if a dead session held the role before, so the takeover is visible.
 5. Returns the startup summary as additional context, headed with the source and an instruction to trust the summary and files over conversation memory.
 

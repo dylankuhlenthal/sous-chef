@@ -69,7 +69,7 @@ import * as inbox from "./inbox.js";
 import { holdLock, isHeld } from "./lock.js";
 import * as ops from "./ops.js";
 import { run } from "./proc.js";
-import { Dict, get, isDict, or, slice, sorted, strip, truthy, walkFiles } from "./py.js";
+import { Dict, get, isDict, or, readText, slice, sorted, strip, truthy, walkFiles } from "./py.js";
 import * as records from "./records.js";
 import * as runtimes from "./runtimes/index.js";
 import { Listing, Status, WakeError } from "./runtimes/index.js";
@@ -512,6 +512,8 @@ export async function runForever(): Promise<number> {
   const release = await holdLock(lockPath(), 12, (err) => {
     log(`the watcher's lock was lost (${err.message}); this watcher stops after its cycle`);
     loop.stop = true;
+    // Asleep between cycles: stop now, so it never runs a cycle beside the watcher that took the lock.
+    if (!loop.inCycle) void exitBetweenCycles("watcher stopped between cycles (lock lost)");
   });
   if (!release) {
     process.stdout.write("sc watch: another watcher is already running\n");
@@ -646,7 +648,7 @@ export async function health(): Promise<Health> {
 
 function pid(): number | null {
   try {
-    const n = Number(strip(fs.readFileSync(path.join(stateDir(), "watch.pid"), "utf8")));
+    const n = Number(strip(readText(path.join(stateDir(), "watch.pid"))));
     return Number.isInteger(n) ? n : null;
   } catch {
     return null;
@@ -655,7 +657,7 @@ function pid(): number | null {
 
 function beat(): string | null {
   try {
-    return fs.readFileSync(path.join(stateDir(), "watch.beat"), "utf8");
+    return readText(path.join(stateDir(), "watch.beat"));
   } catch {
     return null;
   }
