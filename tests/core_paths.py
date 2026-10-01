@@ -27,6 +27,8 @@ CORE_PATHS = (
     "bin/", "lib/", "docs/", "tests/", "templates/", ".agents/",
     "kinds/general.md", "kinds/investigate.md",
     "AGENTS.md", "CLAUDE.md", ".claude", ".gitignore", "README.md", "install.sh",
+    "src/", "package.json", "package-lock.json", "tsconfig.json", "tsconfig.build.json", "eslint.config.js",
+    "vitest.config.ts",
 )
 
 # Inside a core folder but never core: written per install, gitignored.
