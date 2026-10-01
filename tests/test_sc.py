@@ -12,7 +12,7 @@ import unittest
 from pathlib import Path
 
 import core_paths
-from sc_under_test import CODE, IS_PYTHON, REPO, SC, SOUSCHEF, python_only  # noqa: F401
+from sc_under_test import CODE, REPO, SC, SOUSCHEF, python_only
 from stored_values import LEGACY_OWNER
 
 
@@ -1869,6 +1869,7 @@ class SouschefTests(ScTestCase):
         self.assertEqual(self.started()["fake-chef-1"]["permissions"], "bypass")
 
 
+@python_only
 class SouschefClaudeArgsTests(unittest.TestCase):
     """How `souschef` starts sous chef on the Claude runtime, from claude_bg's own arguments."""
 
@@ -2654,6 +2655,7 @@ class CronWakeNoteTests(RunningWatcherTestCase):
             self.assertIn(note, out.stdout)
 
 
+@python_only
 class WakeTests(unittest.TestCase):
     """The wake path, against a real Unix socket rather than a mock."""
 
@@ -2808,6 +2810,7 @@ class ActivityListingTests(ScTestCase):
         self.assertNotIn("doing:", self.sc("status", sid).stdout)
 
 
+@python_only
 class ClaudeRuntimeParsingTests(unittest.TestCase):
     """The real `claude --bg` output, captured when sous chef launched a session from its own Bash tool."""
 
