@@ -534,14 +534,31 @@ class SetupTests(CodeCopyTestCase):
         self.assertFalse(self.data.exists())
 
     def test_install_names_the_tools_it_cannot_find(self):
-        tools = Path(self.tmp.name) / "tools"
-        tools.mkdir()
-        for name in ("python3", "dirname", "git"):
-            (tools / name).symlink_to(subprocess.run(["which", name], capture_output=True, text=True).stdout.strip())
-        out = self.install("--name", "Sam", ok=False, env={"PATH": str(tools)})
+        # The real PATH, with every folder holding a claude swapped for links to everything else in it.
+        path = []
+        for n, folder in enumerate(os.environ["PATH"].split(os.pathsep)):
+            if folder and (Path(folder) / "claude").exists():
+                tools = Path(self.tmp.name) / f"tools-{n}"
+                tools.mkdir()
+                for item in Path(folder).iterdir():
+                    if item.name != "claude":
+                        (tools / item.name).symlink_to(item)
+                folder = str(tools)
+            path.append(folder)
+        out = self.install("--name", "Sam", ok=False, env={"PATH": os.pathsep.join(path)})
         self.assertEqual(out.returncode, 1)
         self.assertIn("not found on your PATH: claude", out.stderr)
         self.assertFalse((self.code / "my").is_symlink())
+
+    def test_the_owner_file_is_kept_by_the_data_folder_and_ignored_by_the_core(self):
+        self.assertIn("/owner.json", (REPO / ".gitignore").read_text().split())
+        self.install("--name", "Sam")
+        self.assertNotIn("owner.json", (self.data / ".gitignore").read_text())
+
+    def test_env_is_gitignored_in_the_core_and_in_a_new_data_folder(self):
+        self.assertIn("/.env", (REPO / ".gitignore").read_text().split())
+        self.install("--name", "Sam")
+        self.assertIn(".env", (self.data / ".gitignore").read_text().split())
 
 
 class OwnerInstructionsTests(ScTestCase):
@@ -2077,12 +2094,6 @@ class OwnerTests(ScTestCase):
                                                     str(self.work), "--runtime", "fake", stdin="t", ok=False).stderr)
             self.assertIn("No usable owner", self.sc("summary").stdout.splitlines()[0])
             self.assertIn("starts waiting on agent", self.sc("kinds", "--runtime", "fake").stdout)
-
-    def test_the_owner_file_is_kept_by_the_data_folder_and_ignored_by_the_core(self):
-        self.assertIn("/owner.json", (REPO / ".gitignore").read_text().split())
-        sys.path.insert(0, str(CODE / "lib"))
-        from sc.setup import DATA_GITIGNORE
-        self.assertNotIn("owner.json", DATA_GITIGNORE)
 
 
 class OwnerNameTests(ScTestCase):
