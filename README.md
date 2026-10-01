@@ -4,15 +4,19 @@ The owner's go-to agent. Sous chef keeps track of ideas, ongoing topics, PoCs an
 
 ## Install and run it
 
+Needs Node 22 or later with `npm`, `git`, and Claude Code.
+
 ```sh
 git clone <this repo> ~/.sous-chef
-~/.sous-chef/install.sh      # asks where your data folder goes, and who you are
+~/.sous-chef/install.sh      # installs and builds, then asks where your data folder goes, and who you are
 souschef                     # attach, resuming or starting sous chef
 ```
 
 Your memory, jobs, kinds and settings live in your own data folder (by default `~/.my-sous-chef`, optionally its own private git repo), reached from here as `my/`. Nothing personal goes in this repo. Details: `docs/operations/running.md`.
 
-Tests: `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests`.
+After every pull, rebuild: `docs/operations/running.md` ("The build, and updating after a pull").
+
+Tests: `npm test` (the build, the TypeScript unit tests, then `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests`).
 
 ## Docs
 

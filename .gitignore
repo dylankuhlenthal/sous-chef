@@ -12,3 +12,8 @@ __pycache__/
 /instructions.md
 /worker-instructions.md
 /.agents/settings.local.json
+# The TypeScript build (npm ci, npm run build): never committed.
+node_modules/
+dist/
+dist-typecheck/
+coverage/

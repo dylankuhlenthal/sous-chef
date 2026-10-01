@@ -6,13 +6,13 @@ There is no server or daemon to install. Everything is either a file in one of t
 
 ## Two folders joined by one link
 
-The **core** is the code everyone shares (the sous chef repo): `bin/`, `lib/`, `templates/`, `docs/`, `tests/`, the core kinds, `AGENTS.md`, `.agents/` and `install.sh`. It runs from `~/.sous-chef`, because Claude Code's trust, its saved conversations and every brief's `sc` path are keyed to that path.
+The **core** is the code everyone shares (the sous chef repo): `bin/`, `src/` (the code, TypeScript on Node 22 or later, compiled into `dist/` by `npm run build`), `lib/` (the old Python code, kept until TRV-1157, the last step of the rewrite, removes it), `templates/`, `docs/`, `tests/`, the core kinds, `AGENTS.md`, `.agents/` and `install.sh`. It runs from `~/.sous-chef`, because Claude Code's trust, its saved conversations and every brief's `sc` path are keyed to that path.
 
 The **data folder** is the owner's own: their memory, cron jobs, kinds, owner file, instructions, settings, `state/` and `.env`. It lives wherever the owner chose at install (by default `~/.my-sous-chef`) and may be a private git repo of its own, which the watcher keeps committed and pushed.
 
 The core reaches the data folder through one link, `<core>/my` (gitignored). `util.home()` returns that path, through the link and not resolved, so paths written into briefs stay valid if the data folder moves and the link is re-pointed. Without a usable link, every command that needs data refuses and names the fix: no link means run `install.sh`; a broken link names its target. Help, the hooks and `sc setup` work without it. Tests point the data at a temporary folder with `SC_TEST_HOME` instead. Why it is built this way: decision 0020 (the core and the owner's data are separate repos joined by one link).
 
-`install.sh` (thin: it checks `python3`, `git` and `claude`) runs `sc setup` (`lib/sc/setup.py`), which makes or connects the data folder and the link; see `docs/operations/running.md`.
+`install.sh` checks `node` (22 or later), `npm`, `git` and `claude`, brings the install up to date (runs `npm ci` when the dependencies are missing or older than `package-lock.json`, and `npm run build` when the build is missing or stale), then runs `sc setup` (`src/setup.ts`), which makes or connects the data folder and the link; see `docs/operations/running.md`.
 
 ## The parts
 
@@ -20,13 +20,13 @@ The core reaches the data folder through one link, `<core>/my` (gitignored). `ut
 flowchart LR
     D[the owner] -- chat --> SC[sous chef session<br/>Claude Code in the core, ~/.sous-chef]
     D -. claude attach .-> W1
-    SC -- sc spawn / sc send --> CMD[sc command<br/>bin/sc, lib/sc/]
+    SC -- sc spawn / sc send --> CMD[sc command<br/>bin/sc, src/]
     CMD -- claude --bg --> W1[session: build]
     CMD -- claude --bg --> W2[session: shape]
     W1 -- sc report / sc inbox --> CMD
     W2 -- sc report / sc inbox --> CMD
     CMD -- files --> ST[(my/state/<br/>records, event logs, inboxes)]
-    WA[watcher<br/>lib/sc/watch.py] -- reads --> ST
+    WA[watcher<br/>src/watch.ts] -- reads --> ST
     CMD -- wake-up message --> SC
     WA -- wake-up message --> SC
     WA -- wake-up message --> W1
@@ -39,18 +39,18 @@ flowchart LR
 
 | Part | What it does | Where |
 | --- | --- | --- |
-| Sous chef session | Talks to the owner, keeps memory, decides what to launch, handles what sessions report | Any Claude Code session started in the core, normally the background session `souschef` opens (`bin/souschef`, `lib/sc/souschef.py`); instructions in `AGENTS.md` plus the owner's own in `my/instructions.md` (shown in the startup summary), hooks in `.agents/settings.json` |
-| `sc` | Every mechanical action: launching, messaging, reporting, reading events, cleanup | `bin/sc`, `lib/sc/cli.py`, `lib/sc/ops.py` |
+| Sous chef session | Talks to the owner, keeps memory, decides what to launch, handles what sessions report | Any Claude Code session started in the core, normally the background session `souschef` opens (`bin/souschef`, `src/souschef.ts`); instructions in `AGENTS.md` plus the owner's own in `my/instructions.md` (shown in the startup summary), hooks in `.agents/settings.json` |
+| `sc` | Every mechanical action: launching, messaging, reporting, reading events, cleanup | `bin/sc`, `src/cli.ts`, `src/ops.ts` |
 | Sessions | Claude Code background sessions doing one task each, which the owner can open | Launched by `ops.spawn`; brief from `templates/worker-brief.md` plus the kind's file and the owner's `my/worker-instructions.md`. Kinds come from the owner's kinds (`my/kinds/`) first, then the core's (`kinds/`). The core kinds are `general` and `investigate`, which need no skills; a kind that runs a skill declares it, and `sc spawn` refuses it when the runtime says the skill is missing |
 | State | Session records, event logs, inboxes, sous chef's read positions, watcher files | `my/state/` (never tracked), written by `sc`; the one file written directly is a session's own `report.md` |
 | Memory | Sous chef's own notes | `my/memory/`, edited directly by sous chef |
 | Owner | Who this sous chef works for: the name it uses for them everywhere it writes, and their branch prefix. The code and docs name nobody; the startup summary opens with the owner | `my/owner.json`, written by `sc setup` or `sc owner set`, read only through `util.owner()`; decision 0018 |
-| Watcher | A loop that uses no tokens and wakes sous chef or a session when something needs attention, fires scheduled jobs, and keeps the data folder committed and pushed | `lib/sc/watch.py`, started by sous chef's SessionStart hook |
-| Cron jobs | Tasks on a schedule, done by sous chef itself or by a session launched for them | Definitions in `my/cron/<name>.md`, run record in `my/state/cron/`; `lib/sc/cron.py` |
-| Context check | Sous chef's Stop hook: reads how full its context is from Claude Code's transcript and, past a set level, leaves a warning to write working state to memory before compaction | `lib/sc/context.py`, settings in `my/context.json` |
-| Slack | Sous chef's messages to the owner in Slack, sent through the messaging relay (a separate service) with the owner's key; config in `my/.env`, never tracked | `lib/sc/slack.py`, `lib/sc/relay.py`; see `docs/domains/slack.md` |
-| Install | Makes or connects the owner's data folder and the `my` link, and links `sc` and `souschef` | `install.sh`, `lib/sc/setup.py` (`sc setup`) |
-| Runtime | The only code that knows how a session actually runs | `lib/sc/runtimes/claude_bg.py` (and `fake.py` for tests) |
+| Watcher | A loop that uses no tokens and wakes sous chef or a session when something needs attention, fires scheduled jobs, and keeps the data folder committed and pushed | `src/watch.ts`, started by sous chef's SessionStart hook |
+| Cron jobs | Tasks on a schedule, done by sous chef itself or by a session launched for them | Definitions in `my/cron/<name>.md`, run record in `my/state/cron/`; `src/cron.ts` |
+| Context check | Sous chef's Stop hook: reads how full its context is from Claude Code's transcript and, past a set level, leaves a warning to write working state to memory before compaction | `src/context.ts`, settings in `my/context.json` |
+| Slack | Sous chef's messages to the owner in Slack, sent through the messaging relay (a separate service) with the owner's key; config in `my/.env`, never tracked | `src/slack.ts`, `src/relay.ts`; see `docs/domains/slack.md` |
+| Install | Makes or connects the owner's data folder and the `my` link, and links `sc` and `souschef` | `install.sh`, `src/setup.ts` (`sc setup`) |
+| Runtime | The only code that knows how a session actually runs | `src/runtimes/` (`claude-bg.ts`, and `fake.ts` for tests). `claude-bg.ts` is a stub that refuses to start or reach sessions until TRV-1155 (the Claude runtime on Porch) builds it; the Python Claude runtime it replaces, `lib/sc/runtimes/claude_bg.py`, is still in the tree |
 
 ## How the main flows work
 
@@ -74,7 +74,7 @@ flowchart LR
 
 - **Files are the record; wake-ups are best effort.** Every event and message is written to disk before anyone is woken. A lost wake-up delays attention and the watcher retries it; it never loses the message. See decision 0002 (files are the record, wake-ups are best effort).
 - **Mechanics are commands; judgment is instructions.** Sessions and sous chef never handle `state/` files by hand. See decision 0003 (commands for mechanics).
-- **One place knows how sessions run.** Only `lib/sc/runtimes/` calls `claude`. See decision 0004 (Claude only, behind a runtime layer).
+- **One place knows how sessions run.** Only `src/runtimes/` calls `claude`. See decision 0004 (Claude only, behind a runtime layer).
 
 ## Known limits and shortcuts
 
@@ -82,7 +82,8 @@ These are deliberate PoC shortcuts. Each has a safeguard, and each is something 
 
 | Shortcut | Safeguard | What production must do |
 | --- | --- | --- |
-| Wake-ups use Claude Code's local message socket at `/tmp/cc-socks/<pid>.sock`, or `/tmp/cc-socks-<uid>/`, paths observed rather than documented (`lib/sc/wake.py`) | A failure names the reason and the paths it looked in, and `sc send` and `sc report` print it rather than assuming the session is stopped; messages are on disk first, and the watcher retries | Read the socket from a documented source, or use a supported messaging interface if Claude Code publishes one |
+| Wake-ups use Claude Code's local message socket at `/tmp/cc-socks/<pid>.sock`, or `/tmp/cc-socks-<uid>/`, paths observed rather than documented (`lib/sc/wake.py`, the Python Claude runtime's code, still in the tree; the TypeScript Claude runtime arrives with TRV-1155, the Claude runtime on Porch) | A failure names the reason and the paths it looked in, and `sc send` and `sc report` print it rather than assuming the session is stopped; messages are on disk first, and the watcher retries | Read the socket from a documented source, or use a supported messaging interface if Claude Code publishes one |
+| Sous chef's own hooks (`.agents/settings.json`) and hook commands saved by sessions started before the move to TypeScript run `bin/sc` directly, whose first line finds `node` on `PATH`. Hook commands sous chef writes now name the Node that ran `sc` (`process.execPath`), so removing that Node version breaks them until the session is relaunched | `install.sh` says which Node it found; Claude Code's background processes on the development Mac carry a `PATH` with Node 22 (seen 2026-10-01); a hook that cannot start shows as a hook error and blocks nothing (`docs/operations/running.md`, "The build, and updating after a pull") | Launchers that fall back to a Node path recorded at install, or hooks that name it |
 | The watcher is started by sous chef's SessionStart hook, not by a system service | The startup summary says when the watcher is not running | Run it under launchd so it survives reboots without sous chef starting |
 | Sessions run in their kind's permission mode unless a spawn chose another (`sc spawn --permissions`, decision 0010): a kind may set `bypass` (decision 0016, kinds set their default permission mode; the owner's own kinds may, the core's two do not), and every other session runs in `auto`. In `auto` Claude Code's classifier decides what a session may do unattended, and in `bypass` nothing asks. Sous chef's own session runs in `bypass` (decision 0015), though it reads email and Slack from other people | The brief's rules and sous chef's instructions (never merge into `main` or `staging`, ask before anything outward-facing, only the owner's words are instructions), and `auto` for the core's `general` and `investigate` sessions. A session held at a prompt is reported by the watcher (`prompt-waiting`) | Structural guards: branch protection on `main` and `staging`, or a hook that blocks those merge commands |
 | `claude agents --json` fields (`id`, `sessionId`, `name`, `kind`, `pid`, `status`, `waitingFor`) are read without a documented contract, and so are `needs`, `detail`, `inFlight` and `fan` in Claude Code's job file (`~/.claude/jobs/<short id>/state.json`, read from 2.1.278) | An unknown status value counts as busy, and a missing one as unknown. `waiting` was confirmed live and in Claude Code's code (`docs/domains/watcher.md`, "How a prompt is detected"); `needs` only adds detail to a `prompt-waiting` event, and an unreadable file is ignored. `inFlight.tasks` holds back silent stops only while it is a whole number above 0, and for at most 2 hours after a turn ends (`docs/domains/watcher.md`, "Work in flight"); a missing or reshaped field gives today's behaviour. The watcher does not trust the status alone: a session counts as idle when its own turn record shows its turn ended at least 5 minutes ago, and `gone` needs the session missing for a minute (`docs/domains/watcher.md`) | Pin to a documented schema if one is published |
@@ -90,7 +91,7 @@ These are deliberate PoC shortcuts. Each has a safeguard, and each is something 
 | Claude Code's background worktree isolation is turned off for sous chef's own folder and for sessions in worktrees `sc worktree` created; everything else keeps the default | Only worktrees sous chef recorded, and only one active session per worktree | Nothing further observed in the owner's bare-repo layout, where isolation did not block edits anyway; revisit if Claude Code changes the rule |
 | Environment variables passed at launch can be stale, because background sessions may start in a spare process created earlier | Nothing depends on them: identity comes from `CLAUDE_CODE_SESSION_ID`, paths from the brief and hooks | Keep it that way; if Claude Code documents per-session environment, it could simplify the brief |
 | Stopped and archived sessions stay in `claude agents` until removed with `claude rm` | None; they only clutter the agent view | Decide whether `sc cleanup` should also remove the Claude session |
-| Context usage is read from Claude Code's session transcript (`message.usage` on assistant lines), a format observed rather than documented (`lib/sc/context.py`) | Anything unexpected is reported as a failure (a `context-unreadable` event, and `FAILING` in `sc context` and the startup summary), never as a low reading | Read usage from a documented source if Claude Code publishes one |
+| Context usage is read from Claude Code's session transcript (`message.usage` on assistant lines), a format observed rather than documented (`src/context.ts`) | Anything unexpected is reported as a failure (a `context-unreadable` event, and `FAILING` in `sc context` and the startup summary), never as a low reading | Read usage from a documented source if Claude Code publishes one |
 | One sous chef runs at a time, on one machine | On a fresh start (not a resume or compaction) the summary warns when a different sous chef session was registered before. The data folder is pushed by the watcher, so another machine can clone it, but two sous chefs writing the same data folder at once would conflict (syncing stops and says so) | Decide how two machines share one owner's data, if that is ever wanted |
 | Nothing reaches the owner unless they are attached to sous chef, or Slack is set up (`docs/domains/slack.md`) | The records wait on disk, and `sc events` still lists open questions when they next looks; with Slack on, sous chef forwards what the owner asked for (`## Slack me` instructions) and questions (`sc slack ask`) | Send only what the owner asked for, as now; decide whether anything should reach them without an instruction |
 | Slack runs through the messaging relay, which runs on the owner's laptop behind ngrok, and only while the watcher runs (started by sous chef) | Messages wait on the relay for up to seven days and arrive marked late with their age; an unreachable relay is shown in the startup summary and `sc slack status`; a failed send says why. Nothing is queued to send later | Run the relay on Railway (only the URL in `.env` changes), and the watcher under launchd |
