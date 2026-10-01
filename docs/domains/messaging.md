@@ -2,7 +2,7 @@
 
 How sessions and sous chef tell each other things. Both directions work the same way: the message is written to a file first, then the other side gets a one-line wake-up telling it to read. The file is what counts; the wake-up can be lost and the watcher sends it again.
 
-Code: `src/events.ts` (including `CRON_LOG`, `CONTEXT_LOG`, `SLACK_LOG` and `SYNC_LOG`), `src/inbox.ts`, `lib/sc/wake.py`, `src/chef.ts`, `src/ops.ts` (`report`, `send`, `currentSessionRecord`). `lib/sc/wake.py` is the Python Claude runtime's wake-up, still in the tree; TypeScript has no equivalent yet, and the TypeScript Claude runtime arrives with TRV-1155 (the Claude runtime on Porch).
+Code: `src/events.ts` (including `CRON_LOG`, `CONTEXT_LOG`, `SLACK_LOG` and `SYNC_LOG`), `src/inbox.ts`, `src/chef.ts`, `src/ops.ts` (`report`, `send`, `currentSessionRecord`), and the runtime's `wake` and `wakeSessionId` (`src/runtimes/claude-bg.ts`, through Porch's `deliver`).
 
 Paths such as `state/...` in this doc are in the owner's data folder, which the core reaches as `my/` (`docs/architecture.md`, "Two folders joined by one link").
 
@@ -87,6 +87,6 @@ Inside the session, `sc inbox` prints unhandled messages and `sc inbox ack <n>` 
 
 ## The wake-up itself
 
-`wake.post` (in `lib/sc/wake.py`, the Python Claude runtime's code, still in the tree until TRV-1155 brings the TypeScript Claude runtime) connects to `/tmp/cc-socks/<pid>.sock` (or `/tmp/cc-socks-<uid>/`) and writes one JSON line with the text as a user message. The pid comes from the runtime's listing. An idle session starts a turn; a busy one picks the message up at its next tool call. This path is observed behaviour rather than a documented interface; see the shortcuts table in `docs/architecture.md`.
+The Claude runtime's `wake` (a session) and `wakeSessionId` (sous chef itself) call Porch's `deliver` with the sender label `sous chef`. Porch writes the text as a user message to the session's Claude Code message socket: the path the session's own Porch hook recorded at start, or, for a session without Porch's hooks (launched before the move to Porch, or a sous chef started by plain `claude`), paths worked out from its pid. An idle session starts a turn; a busy one picks the message up when it can. A session that is not running gives a `WakeError` with Porch's reason. The socket is observed behaviour rather than a documented interface; see the shortcuts table in `docs/architecture.md`.
 
-Wake-up lines start with `sous chef:` or `sous chef watcher:`, so sous chef can tell them apart from the owner, as its instructions require.
+Porch puts `[from <label>] ` before every message it delivers, so wake-up lines arrive as `[from sous chef] sous chef: ...` or `[from sous chef] sous chef watcher: ...`, and Claude Code shows them as a message from another Claude session. The text after the label is the same as before the move to Porch (the behaviour suite checks it through the fake runtime, which adds no label), so sous chef can still tell wake-ups from the owner, as its instructions require.

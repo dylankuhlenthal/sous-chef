@@ -14,7 +14,7 @@ Any Claude Code session started in this folder is sous chef: its SessionStart ho
 
 ## Stack
 
-TypeScript on Node 22 or later (`src/`, compiled into `dist/`), with one runtime dependency, `proper-lockfile`; Porch arrives with the Claude runtime (TRV-1155). Claude Code background sessions (`claude --bg`), Claude Code hooks, markdown memory files.
+TypeScript on Node 22 or later (`src/`, compiled into `dist/`), with two runtime dependencies: Porch (how sous chef reaches Claude sessions, a private GitHub dependency pinned to a tag) and `proper-lockfile`. Claude Code background sessions (`claude --bg`), Claude Code hooks, markdown memory files.
 
 ## Layout & filing
 
@@ -130,7 +130,7 @@ When the owner asks how to see a session: `sc attach <id>` prints the command. `
 
 ### Handling wake-ups
 
-A message starting with `sous chef:` or `sous chef watcher:` is a wake-up, not the owner. Run `sc events`, handle every item, then run the exact `sc events ack <token>` it prints. If the owner is mid-conversation, handle it briefly and mention it in one line without derailing the conversation.
+A message starting with `sous chef:` or `sous chef watcher:` is a wake-up, not the owner; it arrives with Porch's label in front, as `[from sous chef] sous chef: ...`. Run `sc events`, handle every item, then run the exact `sc events ack <token>` it prints. If the owner is mid-conversation, handle it briefly and mention it in one line without derailing the conversation.
 
 - **needs-decision / blocked**: answer it yourself only when the task, the owner's earlier words, or a ratified record (repo docs, or a record the owner's instructions name) clearly covers it. Otherwise ask the owner: the question, the options, your recommendation. Send the answer with `sc send <id> --resolves <key> "..."`. Open questions stay listed in `sc events` until resolved.
 - **waiting**: the session wants the owner in its terminal. Tell the owner, with the attach command, unless the owner is already there.
@@ -219,6 +219,6 @@ SC_UNDER_TEST=<code root> PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover
 - A `/compact` sent as a message is treated as text, not run.
 - Environment variables given to a background session at launch can be stale (it may start in a spare process made for an earlier launch). Never rely on them; `sc` identifies sessions by the Claude session id.
 - Never put backticks in a double-quoted shell argument, for example in an `sc send` message. zsh runs them as command substitution and the text silently disappears from what the session receives. Single-quote the message, or leave the backticks out.
-- Claude Code ignores `permissions` in a folder's `.claude/settings.local.json` and `.claude/settings.json` until that exact folder is trusted (trust is per folder, not inherited from a parent), and `claude --bg` refuses to start in an untrusted folder. A scratch install for testing needs a trusted `--cwd` for its sessions.
+- Claude Code ignores `permissions` in a folder's `.claude/settings.local.json` and `.claude/settings.json` until that exact folder is trusted (trust is per folder, not inherited from a parent), and `claude --bg` refuses to start in an untrusted folder. A scratch install for testing needs a trusted `--cwd` for its sessions. With Claude Code 2.1.286, `claude --bg` accepted a plain folder inside a trusted folder, but refused a folder that is its own git repo (`git init`) inside the same trusted folder: give scratch sessions a plain folder. A plain copy of the core there also ran its `.agents/settings.json` hooks (`chef-start` registered it).
 - `claude --bg --resume <id>` continues a session only with no other flags; with flags it starts a copy. Use `sc resume`, which does this correctly.
 - In the TypeScript code, never call `process.exit()` after printing: on macOS, output to a pipe is written asynchronously and can be cut off (Node documents this under `process.stdout`). Return an exit code instead (`process.exitCode`). And never block the event loop in anything that holds a lock (the watcher holds one for its whole life): `proper-lockfile` keeps a lock alive from a timer, so a holder blocked for 10 seconds loses its lock to another process. Run programs and network calls asynchronously (`src/proc.ts`, `src/relay.ts`).
