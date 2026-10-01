@@ -98,7 +98,7 @@ class H:
         self.env = {k: os.environ[k] for k in keep if k in os.environ}
         self.env.update({"PATH": self.path, "PORCH_HOME": str(self.porch), "PORCH_CLAUDE_BIN": str(self.stub),
                          "CLAUDE_CONFIG_DIR": str(self.claude_config), "SC_SYNC_QUIET": "10",
-                         "GIT_TERMINAL_PROMPT": "0"})
+                         "GIT_TERMINAL_PROMPT": "0", "TMPDIR": str(scratch / "tmp")})
 
     def run(self, args, cwd=None, env=None, timeout=300, input=None, extra_env=None):
         e = dict(env or self.env)
@@ -282,7 +282,7 @@ def check_live_untouched(h, before):
 
 def setup(h):
     section("setting up the scratch install (Python core, stub claude)")
-    for d in (h.stub_dir, h.porch, h.claude_config, h.work):
+    for d in (h.stub_dir, h.porch, h.claude_config, h.work, h.s / "tmp"):
         d.mkdir(parents=True)
     shutil.copy2(STUB, h.stub)
     h.stub.chmod(0o755)
@@ -581,6 +581,11 @@ def rollback_checks(h, started_at):
     check(start >= 0 and len(set(beats)) >= 3 and "cycle failed" not in after,
           "the Python watcher took its lock among the TypeScript leftovers and runs cycles cleanly",
           f"{len(set(beats))} beats")
+    r = h.switch("--rollback", "--yes", label="rollback-again")
+    ws = h.watchers()
+    check(r.returncode == 0 and h.head_of() == h.origin_tag() and len(ws) == 1 and ws[0][1] == "python",
+          "--rollback run a second time (dist/ and node_modules/ untracked on the Python commit) finishes, "
+          "one Python watcher", "" if r.returncode == 0 else (r.stdout + r.stderr).strip()[-800:])
 
 
 def cleanup(h, keep):
@@ -594,8 +599,11 @@ def cleanup(h, keep):
     left = h.watchers()
     if h.stub.exists():
         h.run([h.stub, "_stub", "killall"])
+    # Only what the rehearsal started: processes running a program from the scratch folder
+    # (the stub's sleepers are already gone), never this harness or anything else naming the folder.
     stray = [l for l in subprocess.run(["ps", "-axww", "-o", "pid=,command="], capture_output=True,
-                                       text=True).stdout.splitlines() if str(h.s) in l]
+                                       text=True).stdout.splitlines()
+             if f" {h.core}/bin/" in l and l.split()[0] != str(os.getpid())]
     for line in stray:
         try:
             os.kill(int(line.split()[0]), signal.SIGTERM)

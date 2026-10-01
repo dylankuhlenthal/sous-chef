@@ -669,11 +669,21 @@ def rollback(core, args):
     tagged = tag_commit(core, "local")
     if not tagged:
         raise Refusal(f"there is no {TAG} tag in {core}; nothing to go back to")
-    dirty = git_out(core, "status", "--porcelain")
+    # The TypeScript build's folders are untracked, not ignored, on a Python commit (its .gitignore
+    # predates them), so a second rollback must not count them as changes.
+    dirty = "\n".join(line for line in git_out(core, "status", "--porcelain").splitlines()
+                      if line not in ("?? dist/", "?? node_modules/"))
     if dirty:
         raise Refusal(f"{core} has uncommitted or untracked changes; commit, move or remove them first:\n{dirty}")
     if not (core / "my").is_dir():
         raise Refusal(f"{core / 'my'} does not reach a data folder; fix the link first")
+    running, _ = record_sessions(state)
+    if running:
+        say("  WARNING: sessions on record are running. Sessions the TypeScript sc launched run their hooks "
+            "with Node, which cannot run the Python bin/sc, so their hooks fail after the rollback (sc report "
+            "still works). Stop them (`sc stop <id>`) first if you can, and relaunch any you still need:")
+        for sid, title, row in running:
+            say(f"    {sid}  {title}  (pid {row.get('pid')})")
     before = check_chef(state)
     if not args.yes:
         say(f"This stops sous chef and the watcher, checks out {TAG} ({tagged[:12]}) in {core} and starts the Python "
@@ -700,8 +710,9 @@ def rollback(core, args):
         return 1
     say("  sous chef is the same session, running; one watcher runs, under Python")
     say(f"\nBack on the Python sous chef. Attach with: {attach or 'souschef'}")
-    say("Sessions the TypeScript sc started keep their turn times in Porch, not in turns.json, so the Python "
-        "watcher's silent-stop check never fires for them (docs/operations/running.md).")
+    say("Sessions the TypeScript sc launched cannot run their hooks on the Python code (their hooks run "
+        "bin/sc with Node), and keep their turn times in Porch, not turns.json, so the Python watcher's "
+        "silent-stop check never fires for them; relaunch the ones you still need (docs/operations/running.md).")
     say(f"To switch forward again later: git -C {core} checkout main, then run this script without --rollback.")
     return 0
 
