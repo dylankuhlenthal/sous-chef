@@ -2,7 +2,8 @@
 
   REPO       the checkout holding these tests. Checks of the repo's own content use it
              (.gitignore, the core path list, the owner-name search).
-  CODE       the code root under test: SC_UNDER_TEST when set and not empty, else REPO.
+  CODE       the code root under test: SC_UNDER_TEST when set and not empty, else REPO,
+             with links resolved.
              A code root is a folder with an executable bin/sc (and bin/souschef), as a
              core checkout or a staged copy has.
   SC         CODE/bin/sc, and SOUSCHEF, CODE/bin/souschef. Tests run them directly as
@@ -34,7 +35,7 @@ def _code_root() -> Path:
     sc = root / "bin" / "sc"
     if not sc.is_file() or not os.access(sc, os.X_OK):
         raise RuntimeError(f"SC_UNDER_TEST={named} is not a code root: {sc} is missing or not executable")
-    return root
+    return root.resolve()  # as sc sees its own root, so paths it prints compare equal
 
 
 CODE = _code_root()

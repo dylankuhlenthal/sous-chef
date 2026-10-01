@@ -1758,31 +1758,83 @@ class WorktreeTests(ScTestCase):
         self.assertEqual(self.fake_state()["sessions"][again]["settings"].get("worktree"), {"bgIsolation": "none"})
 
 
-class SouschefDecisionTests(unittest.TestCase):
+class SouschefTests(ScTestCase):
+    """`souschef --print` against the fake runtime (SC_CHEF_RUNTIME=fake): what it decides from the
+    registered sous chef and the runtime's listing. Never run without --print, which would attach."""
+
+    def souschef(self, *args, env=None, ok=True):
+        e = {**self.base_env, "SC_FAKE_NOW": str(self.clock), **(env or {})}
+        out = subprocess.run([str(SOUSCHEF), "--print", *args], capture_output=True, text=True, env=e)
+        if ok and out.returncode != 0:
+            self.fail(f"souschef {' '.join(args)} failed ({out.returncode}): {out.stdout}{out.stderr}")
+        return out
+
+    def fake_rows(self, **rows):
+        """Replace the fake runtime's sessions with these rows."""
+        path = self.home / "state" / "fake-runtime.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"sessions": rows, "wakes": []}))
+
+    def started(self):
+        """The rows of sous chef sessions souschef started (the fake runtime keys them fake-chef-<n>)."""
+        return {k: v for k, v in self.fake_state()["sessions"].items() if k.startswith("fake-chef-")}
+
+    def test_with_nothing_registered_a_new_sous_chef_is_started_in_bypass_mode(self):
+        out = self.souschef().stdout
+        self.assertEqual(out, "started sous chef (chef-1) with permissions: bypass\nfake attach chef-1\n")
+        row = self.started()["fake-chef-1"]
+        self.assertEqual((row["name"], row["permissions"], row["cwd"]), ("sous-chef", "bypass", str(CODE)))
+
+    def test_a_running_background_sous_chef_is_attached_not_started(self):
+        self.register_chef()
+        self.fake_rows(**{"chef-1": {"alive": True, "pid": 1, "kind": "background", "id": "abcd1234"}})
+        self.assertEqual(self.souschef().stdout, "fake attach abcd1234\n")
+        self.assertEqual(self.started(), {})
+
+    def test_a_sous_chef_open_in_a_terminal_is_reported_and_left_alone(self):
+        self.register_chef()
+        self.fake_rows(**{"chef-1": {"alive": True, "pid": 1, "kind": "interactive", "id": "abcd1234"}})
+        out = self.souschef(ok=False)
+        self.assertEqual(out.returncode, 1)
+        self.assertIn("already open in another terminal", out.stdout)
+        self.assertNotIn("fake attach", out.stdout)
+        self.assertEqual(self.started(), {})
+
+    def test_a_stopped_or_unlisted_sous_chef_is_resumed(self):
+        self.register_chef()
+        for rows in ({"chef-1": {"alive": False, "kind": "background", "id": "abcd1234"}}, {}):
+            self.fake_rows(**rows)
+            out = self.souschef().stdout
+            short = "abcd1234" if rows else "chef-1"
+            self.assertEqual(out, f"resumed sous chef ({short})\nfake attach {short}\n")
+            self.assertEqual(self.fake_state()["sessions"]["chef-1"]["pid"], 1)
+            self.assertEqual(self.started(), {})
+
+    def test_a_sous_chef_that_does_not_come_back_is_replaced_by_a_new_one(self):
+        self.register_chef()
+        self.fake_rows(**{"chef-1": {"alive": False, "kind": "background", "id": "abcd1234"}})
+        out = self.souschef(env={"SC_FAKE_RESUME_FAILS": "1"}).stdout
+        self.assertEqual(out, "could not resume the previous sous chef session; starting a new one\n"
+                              "started sous chef (chef-1) with permissions: bypass\nfake attach chef-1\n")
+        self.assertEqual(list(self.started()), ["fake-chef-1"])
+
+    def test_new_stops_the_background_sous_chef_and_starts_a_fresh_one(self):
+        self.register_chef()
+        self.fake_rows(**{"chef-1": {"alive": True, "pid": 1, "kind": "background", "id": "abcd1234"}})
+        out = self.souschef("--new").stdout
+        self.assertEqual(out, "stopped the previous sous chef (abcd1234); its conversation is kept\n"
+                              "started sous chef (chef-1) with permissions: bypass\nfake attach chef-1\n")
+        old = self.fake_state()["sessions"]["chef-1"]
+        self.assertFalse(old["alive"])
+        self.assertNotIn("pid", old)
+        self.assertEqual(self.started()["fake-chef-1"]["permissions"], "bypass")
+
+
+class SouschefClaudeArgsTests(unittest.TestCase):
+    """How `souschef` starts sous chef on the Claude runtime, from claude_bg's own arguments."""
+
     def setUp(self):
-        import sys
         sys.path.insert(0, str(CODE / "lib"))
-        from sc import souschef
-        self.decide = souschef.decide
-
-    def test_nothing_registered_starts(self):
-        self.assertEqual(self.decide(None, {}), ("start", None))
-
-    def test_running_background_session_is_attached(self):
-        info = {"session_id": "abcd1234-full"}
-        rows = {"abcd1234-full": {"id": "abcd1234", "pid": 9, "kind": "background"}}
-        self.assertEqual(self.decide(info, rows), ("attach", "abcd1234"))
-
-    def test_running_terminal_session_is_reported_not_attached(self):
-        info = {"session_id": "abcd1234-full"}
-        row = {"id": "abcd1234", "pid": 9, "kind": "interactive"}
-        self.assertEqual(self.decide(info, {"abcd1234-full": row}), ("elsewhere", row))
-
-    def test_stopped_or_unlisted_session_is_resumed(self):
-        info = {"session_id": "abcd1234-full"}
-        self.assertEqual(self.decide(info, {"abcd1234-full": {"id": "abcd1234", "kind": "background"}}),
-                         ("resume", "abcd1234-full"))
-        self.assertEqual(self.decide(info, {}), ("resume", "abcd1234-full"))
 
     def test_a_new_sous_chef_is_started_in_bypass_mode(self):
         from sc import souschef
@@ -2133,10 +2185,9 @@ class OwnerNameTests(ScTestCase):
 
     def test_the_first_prompt_waits_for_the_owner(self):
         self.become("Sam", "sam/")
-        code = "import sys; sys.path.insert(0, sys.argv[1]); from sc import souschef; print(souschef.first_prompt())"
-        out = subprocess.run([sys.executable, "-c", code, str(CODE / "lib")], capture_output=True, text=True,
-                             env=self.base_env, check=True).stdout
-        self.assertTrue(out.strip().endswith("Then wait for Sam."))
+        subprocess.run([str(SOUSCHEF), "--print"], capture_output=True, text=True, env=self.base_env, check=True)
+        prompt = self.fake_state()["sessions"]["fake-chef-1"]["launch_prompt"]
+        self.assertTrue(prompt.endswith("Then wait for Sam."), prompt)
 
 
 class OwnerKindTests(ScTestCase):

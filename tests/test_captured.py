@@ -16,13 +16,12 @@ import json
 import os
 import re
 import subprocess
-import sys
 from pathlib import Path
 
 import core_paths
 import fake_relay
 from fake_relay import ALEX, BOT
-from sc_under_test import CODE
+from sc_under_test import CODE, SOUSCHEF
 from test_sc import ScTestCase
 
 CAPTURED = Path(__file__).resolve().parent / "captured"
@@ -141,10 +140,10 @@ class CapturedSummaryTests(CapturedTestCase):
         self.assertCaptured("chef-start-second-session.txt", json.loads(out)["hookSpecificOutput"]["additionalContext"])
 
     def test_the_first_prompt_souschef_starts_sous_chef_with(self):
-        code = "import sys; sys.path.insert(0, sys.argv[1]); from sc import souschef; print(souschef.first_prompt())"
-        out = subprocess.run([sys.executable, "-c", code, str(CODE / "lib")], capture_output=True, text=True,
-                             env={**self.base_env}, check=True).stdout
-        self.assertCaptured("souschef-first-prompt.txt", out)
+        """What a new sous chef is started with, as the runtime received it (`souschef --print`, fake runtime)."""
+        subprocess.run([str(SOUSCHEF), "--print"], capture_output=True, text=True, env={**self.base_env}, check=True)
+        prompt = json.loads((self.home / "state" / "fake-runtime.json").read_text())["sessions"]["fake-chef-1"]
+        self.assertCaptured("souschef-first-prompt.txt", prompt["launch_prompt"] + "\n")
 
 
 class CapturedSlackTests(CapturedTestCase):
