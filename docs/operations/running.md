@@ -2,7 +2,7 @@
 
 ## Requirements
 
-- macOS or Linux with Node 22 or later and `npm` (developed and tested on Node 22.14). The one runtime dependency, `proper-lockfile`, is installed by `npm ci` into the core's `node_modules/`.
+- macOS or Linux with Node 22 or later and `npm` (developed and tested on Node 22.14). The two runtime dependencies, Porch and `proper-lockfile`, are installed by `npm ci` into the core's `node_modules/`. Porch comes from its private GitHub repo, pinned to a tag (decision 0025), so `npm ci` needs read access to that repo (`package-lock.json` records it as an SSH URL) and whatever Porch's own build needs: npm runs Porch's `prepare` build on install, which installs its development dependencies, including the native module `node-pty`.
 - Claude Code with background sessions (`claude --bg`), logged in. Verified with 2.1.274.
 - `git`, for `sc worktree`, for `sc cleanup`'s unlanded-work check, and for keeping the data folder in a git repo.
 
@@ -15,7 +15,7 @@ git clone <the sous chef core repo> ~/.sous-chef
 ~/.sous-chef/install.sh
 ```
 
-`install.sh` checks that `node`, `npm`, `git` and `claude` are on `PATH` (naming every missing one), that `node` is version 22 or later, and says which Node it found (`using Node v22.14.0 at <path>; hooks and the watcher run this Node`). It then brings the install up to date, doing only what is out of date. When `bin/sc --help` fails, it runs `npm ci` if `node_modules/.package-lock.json` is missing or `bin/sc` says the dependencies are older than `package-lock.json`, then `npm run build` if `bin/sc` still fails. It refuses to reinstall a `node_modules` that is a link to another install. Last, it runs `sc setup` (`src/setup.ts`), which asks:
+`install.sh` checks that `node`, `npm`, `git` and `claude` are on `PATH` (naming every missing one), that `node` is version 22 or later, and says which Node it found (`using Node v22.14.0 at <path>; hooks and the watcher run this Node`). It then brings the install up to date, doing only what is out of date. When `bin/sc --help` fails, it runs `npm ci` if `node_modules/.package-lock.json` is missing, if `bin/sc` says the dependencies are older than `package-lock.json`, or if the build is missing or did not finish and `package-lock.json` is newer than the installed dependencies (`bin/sc` can only compare the two once a build has finished), then `npm run build` if `bin/sc` still fails. It refuses to reinstall a `node_modules` that is a link to another install. Last, it runs `sc setup` (`src/setup.ts`), which asks:
 
 | Question | What happens |
 | --- | --- |

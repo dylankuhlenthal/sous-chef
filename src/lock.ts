@@ -21,15 +21,18 @@ function retries(seconds: number) {
 }
 
 /**
- * Hold an exclusive lock on `p` while `fn` runs (Python's util.locked). Waits about 15
- * seconds for a lock someone else holds, then throws.
+ * Hold an exclusive lock on `p` while `fn` runs (Python's util.locked). Waits for as long
+ * as someone else holds it, as Python's flock did: a holder that dies stops touching its
+ * lock, which is then taken over after STALE_MS, so the wait always ends. (Some holders
+ * are slow on purpose: the cron run lock is held while sessions launch, which can take
+ * more than 90 seconds.)
  */
 export async function withLock<T>(p: string, fn: () => T | Promise<T>): Promise<T> {
   mkdirs(path.dirname(p));
   const release = await lockfile.lock(p, {
     realpath: false,
     stale: STALE_MS,
-    retries: retries(15),
+    retries: { forever: true, factor: 1, minTimeout: 100, maxTimeout: 100 },
     // A short lock is only compromised if its holder blocked for STALE_MS, which nothing
     // here does. Never crash the command over it.
     onCompromised: () => undefined,

@@ -326,7 +326,8 @@ async function cmdStatus(args: Args): Promise<void> {
   const rt = runtimes.get(rec.runtime);
   const log = events.readAll(rec.id);
   const st = await rt.status(rec);
-  const turns = records.turns(rec.id);
+  // The same turn times the watcher uses: the runtime's own when it keeps them, else turns.json.
+  const turns = (st.turns ?? records.turns(rec.id)) as Dict;
   print(`${rec.id} (${rec.kind}: ${rec.title})`);
   print(`  running: ${st.alive ? "yes" : "no"}${truthy(st.busy) && !truthy(st.prompt) ? " (busy)" : ""}` +
     `${truthy(rec.stopped_by_sc) ? " (stopped by sous chef)" : ""}`);

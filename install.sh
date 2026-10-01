@@ -23,9 +23,15 @@ if ! node -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 22 ? 0
 fi
 echo "using Node $(node --version) at $(node -p process.execPath); hooks and the watcher run this Node"
 # bin/sc checks the dependencies and the build before it runs anything, and says what is out of date.
+# The dependencies are reinstalled when they are missing or out of date. bin/sc names out-of-date
+# dependencies only once a build has finished, so after an interrupted build (no dist/ or no
+# stamp) a package-lock.json newer than the installed one counts as out of date too.
 if ! node "$here/bin/sc" --help >/dev/null 2>&1; then
+  why=$(node "$here/bin/sc" --help 2>&1 >/dev/null || true)
   if [ ! -e "$here/node_modules/.package-lock.json" ] ||
-     node "$here/bin/sc" --help 2>&1 >/dev/null | grep -q "node_modules are older than package-lock.json"; then
+     echo "$why" | grep -q "node_modules are older than package-lock.json" ||
+     { echo "$why" | grep -q "has no build" &&
+       [ "$here/package-lock.json" -nt "$here/node_modules/.package-lock.json" ]; }; then
     if [ -L "$here/node_modules" ]; then
       echo "install.sh: $here/node_modules is a link to another install, so it is not reinstalled from here" >&2
       exit 1

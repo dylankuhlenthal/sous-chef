@@ -89,23 +89,20 @@ function hookJson(text) {
 
 const args = process.argv.slice(2);
 const major = Number(process.versions.node.split(".")[0]);
-if (major < 22) {
-  process.stderr.write(`${PROGRAM}: sous chef needs Node 22 or later; this is Node ${process.version} at ` +
-    `${process.execPath}\n`);
+const core = fs.realpathSync(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
+// An old Node is checked first: the build check and the compiled code need Node 22.
+const problem = major < 22
+  ? `sous chef needs Node 22 or later; this is Node ${process.version} at ${process.execPath}`
+  : buildProblem(core);
+if (problem && args[0] === "hook" && args[1] === "chef-start") {
+  // A hook must never break the session: sous chef's startup hook says what is wrong instead.
+  process.stdout.write(hookJson(`Sous chef cannot start: ${problem}. Tell the person you are working with, ` +
+    "and do nothing as sous chef until it is fixed.") + "\n");
+} else if (problem) {
+  // Exit 1, never 2: a PreToolUse hook exiting 2 would block the tool call.
+  process.stderr.write(`${PROGRAM}: ${problem}\n`);
   process.exitCode = 1;
 } else {
-  const core = fs.realpathSync(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
-  const problem = buildProblem(core);
-  if (problem && args[0] === "hook" && args[1] === "chef-start") {
-    // A hook must never break the session: sous chef's startup hook says what is wrong instead.
-    process.stdout.write(hookJson(`Sous chef cannot start: ${problem}. Tell the person you are working with, ` +
-      "and do nothing as sous chef until it is fixed.") + "\n");
-  } else if (problem) {
-    // Exit 1, never 2: a PreToolUse hook exiting 2 would block the tool call.
-    process.stderr.write(`${PROGRAM}: ${problem}\n`);
-    process.exitCode = 1;
-  } else {
-    const { main } = await import(pathToFileURL(path.join(core, "dist", "main.js")).href);
-    process.exitCode = await main(PROGRAM, args);
-  }
+  const { main } = await import(pathToFileURL(path.join(core, "dist", "main.js")).href);
+  process.exitCode = await main(PROGRAM, args);
 }

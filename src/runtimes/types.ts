@@ -52,6 +52,25 @@ export interface Status {
   pid: unknown;
   prompt: string | null;
   activity?: Activity | Dict | null;
+  /**
+   * The session's turn times in epoch seconds, only when the runtime keeps its own turn
+   * record for this session. Without it, callers use sc's turns.json (records.turns).
+   */
+  turns?: Turns;
+  /** For a session that is not running, what the runtime says about why, when it knows. */
+  stopped?: Stopped;
+}
+
+/** When the session's last turn started and ended (epoch seconds; null: not yet). */
+export interface Turns {
+  last_prompt_at: number | null;
+  last_stop_at: number | null;
+}
+
+/** How the runtime sees a stopped session: its status word, and the reason it gives (null: none). */
+export interface Stopped {
+  status: string;
+  reason: string | null;
 }
 
 /**
@@ -89,6 +108,12 @@ export interface Runtime {
   attachExec(shortId: string, cwd: string, env: Record<string, string>): Promise<number>;
   /** The command the owner runs to open the session. */
   attachCommand(rec: Dict): string;
+  /**
+   * Optional: tell the tool the state the session just reported (`sc report`), for a
+   * runtime whose tool keeps such a status. Called after the event is written and sous
+   * chef is woken; a failure is printed as one line and changes nothing else.
+   */
+  reportStatus?(rec: Dict, state: string, text: string): Promise<void>;
   /**
    * Whether a session in cwd can run the skill `name`: true, false, or null when the
    * runtime cannot tell. cwd null means no project (`sc kinds`). Only false refuses a spawn.

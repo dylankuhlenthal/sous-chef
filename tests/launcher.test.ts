@@ -125,6 +125,18 @@ describe("the launchers", () => {
     expect(r.stderr).toMatch(/^sc: sous chef needs Node 22 or later; this is Node v20\.\S+ at \S+\n$/);
   });
 
+  it.skipIf(oldNode() === null)("say Node older than 22 to sous chef at hook chef-start, exiting 0", () => {
+    const node = oldNode()!;
+    const r = spawnSync(node, [path.join(core, "bin", "sc"), "hook", "chef-start"], { encoding: "utf8" });
+    expect(r.status).toBe(0);
+    expect(r.stderr).toBe("");
+    const out = JSON.parse(r.stdout) as { hookSpecificOutput: { hookEventName: string; additionalContext: string } };
+    expect(out.hookSpecificOutput.hookEventName).toBe("SessionStart");
+    expect(out.hookSpecificOutput.additionalContext).toMatch(new RegExp("^Sous chef cannot start: sous chef needs " +
+      "Node 22 or later; this is Node v20\\.\\S+ at \\S+\\. Tell the person you are working with, and do nothing " +
+      "as sous chef until it is fixed\\.$"));
+  });
+
   it("refuse other hooks with exit 1, never 2", () => {
     fs.rmSync(path.join(core, "dist", ".build-stamp"));
     const r = run("sc", "hook", "guard-edit");
