@@ -50,7 +50,7 @@ flowchart LR
 | Context check | Sous chef's Stop hook: reads how full its context is from Claude Code's transcript and, past a set level, leaves a warning to write working state to memory before compaction | `src/context.ts`, settings in `my/context.json` |
 | Slack | Sous chef's messages to the owner in Slack, sent through the messaging relay (a separate service) with the owner's key; config in `my/.env`, never tracked | `src/slack.ts`, `src/relay.ts`; see `docs/domains/slack.md` |
 | Install | Makes or connects the owner's data folder and the `my` link, and links `sc` and `souschef` | `install.sh`, `src/setup.ts` (`sc setup`) |
-| Runtime | The only code that knows how a session actually runs | `src/runtimes/` (`claude-bg.ts`, and `fake.ts` for tests). The Claude runtime reaches sessions through Porch, used as a library pinned to a tag: listing, status, waking, launching and turn times go through Porch, while resume, stop and attach run `claude` directly (decisions 0025 and 0026; `docs/domains/sessions.md`, "The Claude runtime"). The Python Claude runtime, `lib/sc/runtimes/claude_bg.py`, stays in the tree only until the switch-over |
+| Runtime | The only code that knows how a session actually runs | `src/runtimes/` (`claude-bg.ts`, and `fake.ts` for tests). The Claude runtime reaches sessions through Porch, used as a library pinned to a tag: listing, status, waking, launching and turn times go through Porch, while resume, stop and attach run `claude` directly (decisions 0025 and 0026; `docs/domains/sessions.md`, "The Claude runtime"). The Python Claude runtime, `lib/sc/runtimes/claude_bg.py`, stays in the tree until TRV-1157 (tests in TypeScript, Python leaves the core) removes it |
 
 ## How the main flows work
 

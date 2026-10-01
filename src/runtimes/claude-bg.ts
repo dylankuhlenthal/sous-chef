@@ -287,7 +287,12 @@ export function createClaudeRuntime(options: ClaudeRuntimeOptions = {}): Runtime
       const rows: Listing = {};
       for (const obs of result.sessions) {
         const row = rowOf(obs);
-        if (typeof row.id === "string" && row.id) rows[row.id] = row;
+        // A short id is keyed once: a running session's row is never replaced by a stopped
+        // one that Porch remembers under the same short id.
+        const short = row.id;
+        if (typeof short === "string" && short && !(Object.hasOwn(rows, short) && rows[short]!.alive && !row.alive)) {
+          rows[short] = row;
+        }
         rows[obs.session] = row;
       }
       return rows;
@@ -311,10 +316,11 @@ export function createClaudeRuntime(options: ClaudeRuntimeOptions = {}): Runtime
         if (!named) throw new SCError(`claude --bg did not start the session (exit ${out.code}): ${tail(out)}`);
         short = named.id as string;
       }
-      // The full session id appears shortly after launch.
+      // The full session id appears in the listing shortly after launch. Only a listed
+      // session counts: Porch also finds a stopped session it remembers by short id.
       for (let i = 0; i < 20; i++) {
         const obs = await observe(short);
-        if (obs) return { short_id: short, session_id: obs.session };
+        if (obs && ((obs.raw ?? {}) as Dict).listing) return { short_id: short, session_id: obs.session };
         await wait(1);
       }
       return { short_id: short, session_id: null };

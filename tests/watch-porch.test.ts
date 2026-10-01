@@ -12,9 +12,12 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { RecordStore, sessionsDir } from "@dylankuhlenthal/porch";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { main as cli } from "../src/cli.js";
 import * as events from "../src/events.js";
+import * as ops from "../src/ops.js";
 import * as records from "../src/records.js";
+import { now, writeJson } from "../src/util.js";
 import { cycle } from "../src/watch.js";
 import { installStub, type Stub } from "./claude-stub.js";
 
@@ -108,5 +111,75 @@ describe("the watcher on Porch", () => {
     await cycle();
     const gone = events.readAll("general-x-1234").find((e) => e.state === "gone")!;
     expect(gone.text).toContain("did not stop it. Porch reports it as not found. Check");
+  });
+});
+
+// Turn times: a session launched through Porch has them in Porch's record and no
+// turns.json; one launched before has only turns.json. The watcher and `sc status` use
+// the runtime's when it has them (decision 10 of the TypeScript rewrite).
+describe("turn times on Porch", () => {
+  const iso = (secondsAgo: number) => new Date((now() - secondsAgo) * 1000).toISOString();
+
+  async function idleWithPorchTurns() {
+    await session({}, null); // waiting on the agent
+    stub.write({ agents: [{ id: SHORT, sessionId: SID, name: "sc-general-x", kind: "background", pid: 4242, status: "idle" }] });
+    await store.updateInside("claude", SID, { pid: 4242, status: "idle", lastTurnStart: iso(3 * 3600), lastTurnEnd: iso(3 * 3600 - 5),
+      data: { shortId: SHORT } });
+    // A turns.json that would say a turn has just started, so it must not be the one read.
+    writeJson(path.join(records.sessionDir("general-x-1234"), "turns.json"), { last_prompt_at: now() });
+  }
+
+  it("reports a silent stop from Porch's turn times, not turns.json", async () => {
+    await idleWithPorchTurns();
+    await cycle();
+    expect(states()).toContain("silent-stop");
+  });
+
+  it("shows Porch's turn times in sc status", async () => {
+    await idleWithPorchTurns();
+    const out: string[] = [];
+    const spy = vi.spyOn(process.stdout, "write").mockImplementation((chunk) => (out.push(String(chunk)), true));
+    try {
+      expect(await cli(["status", "general-x-1234"])).toBe(0);
+    } finally {
+      spy.mockRestore();
+    }
+    const text = out.join("");
+    expect(text).toContain("  last prompt at: 3h ago\n");
+    expect(text).toContain("  last stop at: 2h ago\n");
+  });
+});
+
+describe("sc report on Porch", () => {
+  it("sets the session's Porch self status after writing the event", async () => {
+    await session({}, null);
+    process.env.CLAUDE_CODE_SESSION_ID = SID;
+    try {
+      await ops.report("needs-decision", "A or B?");
+    } finally {
+      delete process.env.CLAUDE_CODE_SESSION_ID;
+    }
+    expect(states()).toContain("needs-decision");
+    expect((await store.read("claude", SID))?.self).toMatchObject({ status: "needs-input", text: "A or B?" });
+  });
+
+  it("prints one line and changes nothing else when Porch cannot set it", async () => {
+    await session({}, null);
+    // Two harnesses claim the process, so Porch refuses to guess which session it is.
+    Object.assign(process.env, { CLAUDE_CODE_SESSION_ID: SID, PI_SESSION_ID: "pi-session" });
+    const err: string[] = [];
+    const spy = vi.spyOn(process.stderr, "write").mockImplementation((chunk) => (err.push(String(chunk)), true));
+    try {
+      const event = await ops.report("working", "busy with it");
+      expect(event.state).toBe("working");
+    } finally {
+      spy.mockRestore();
+      delete process.env.CLAUDE_CODE_SESSION_ID;
+      delete process.env.PI_SESSION_ID;
+    }
+    expect(states()).toContain("working");
+    expect(err).toHaveLength(1);
+    expect(err[0]).toMatch(/^porch status not updated: this process looks like it runs in more than one session/);
+    expect(await store.read("claude", SID)).toBeNull();
   });
 });

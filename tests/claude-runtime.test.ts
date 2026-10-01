@@ -213,6 +213,17 @@ describe("on Porch's Claude adapter, with canned listings", () => {
     await expect(rt.wake(rec, "x")).rejects.toThrow(new WakeError("'claude' is not on PATH"));
   });
 
+  it("keeps a running session's row under its short id when Porch also remembers a stopped one with it", async () => {
+    // A stopped session Porch still has a record of, sorted after the running one.
+    const old = "ffffffff-0000-0000-0000-000000000000";
+    const store = new RecordStore(sessionsDir(env));
+    await store.updateInside("claude", old, { pid: 1, status: "idle", data: { shortId: SHORT } });
+    await store.updateInside("claude", old, { status: "ended", endedAt: T1, endReason: "other" });
+    const rows = await setup([row()]).listing();
+    expect(rows[SHORT]).toMatchObject({ sessionId: SID, alive: true });
+    expect(rows[old]).toMatchObject({ alive: false });
+  });
+
   it("lists normally when only one session record cannot be read", async () => {
     const rt = setup([row()]);
     fs.mkdirSync(sessionsDir(env), { recursive: true });
@@ -331,6 +342,13 @@ describe("running Claude Code (a stub claude on PATH)", () => {
     stub.write({ launchOutput: "Error: not logged in" });
     await expect(runtime().launch(rec(), "go", {}, {})).rejects.toThrow(
       new SCError("claude --bg did not start the session (exit 0): Error: not logged in"));
+  });
+
+  it("takes the session id only from the listing, never from a stopped session Porch remembers by the same short id", async () => {
+    const store = new RecordStore(sessionsDir(env));
+    await store.updateInside("claude", "ffffffff-0000-0000-0000-000000000000", { pid: 1, status: "idle", data: { shortId: SHORT } });
+    stub.write({ launchOutput: `backgrounded · ${SHORT} · n` });
+    expect(await runtime().launch(rec(), "go", {}, {})).toEqual({ short_id: SHORT, session_id: null });
   });
 
   it("returns no session id when the session never appears", async () => {
