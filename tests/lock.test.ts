@@ -51,6 +51,18 @@ describe("withLock", () => {
     await withLock(p, () => undefined);
     expect(Date.now() - started).toBeGreaterThanOrEqual(400);
   });
+
+  // Python's flock waited as long as the holder held; giving up after a set time crashed
+  // sc with proper-lockfile's error while a slow holder (the cron run lock, held through
+  // launches) was still working.
+  it("keeps waiting for a live holder longer than the old 15-second limit", async () => {
+    const p = path.join(tmpdir(), ".runs.lock");
+    const child = await holder(p);
+    const started = Date.now();
+    setTimeout(() => child.kill("SIGTERM"), 18_000);
+    await withLock(p, () => undefined);
+    expect(Date.now() - started).toBeGreaterThanOrEqual(17_500);
+  }, 40_000);
 });
 
 describe("the watcher's lock", () => {
