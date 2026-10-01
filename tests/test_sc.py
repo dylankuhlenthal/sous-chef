@@ -1442,9 +1442,10 @@ class PromptWatcherTests(ScTestCase):
         self.assertIn("waiting on: alex", self.sc("status", sid).stdout)
 
 
-class WatcherCodeTests(ScTestCase):
-    """A running watcher and the code under it. These start real watcher processes (no Claude
-    sessions) from a copy of the code, so a test can change that code without touching this checkout."""
+class RunningWatcherTestCase(ScTestCase):
+    """Starts real watcher processes (no Claude sessions) from a copy of the code under test, and
+    stops them afterwards. A test never takes the watcher's lock itself: how the lock is held
+    differs by language (TRV-1143 decision 13), so a test that needs a running watcher starts one."""
 
     def setUp(self):
         super().setUp()
@@ -1455,8 +1456,8 @@ class WatcherCodeTests(ScTestCase):
         self.stop_watchers()  # before the temporary home (and its watch.pid) is deleted
         super().tearDown()
 
-    def copy_sc(self, *args, poll="0.2", stdin=None):
-        env = {**self.base_env, "SC_WATCH_POLL": poll}
+    def copy_sc(self, *args, poll="0.2", stdin=None, env=None):
+        env = {**self.base_env, "SC_WATCH_POLL": poll, **(env or {})}
         return subprocess.run([str(self.code / "bin" / "sc"), *args], capture_output=True, text=True, env=env,
                               timeout=60, input=stdin)
 
@@ -1479,6 +1480,11 @@ class WatcherCodeTests(ScTestCase):
 
     def pid(self):
         return int((self.state / "watch.pid").read_text())
+
+
+class WatcherCodeTests(RunningWatcherTestCase):
+    """A running watcher and the code under it: the copy lets a test change that code without
+    touching the code under test."""
 
     def change_code(self, text="# a change\n"):
         with open(self.code / "lib" / "sc" / "util.py", "a") as f:
@@ -2445,19 +2451,6 @@ class CronTests(ScTestCase):
         self.clock += self.HOUR
         self.assertIn("wrote due as cron event #3 for sous chef", self.watch())
 
-    def test_run_says_when_sous_chef_is_idle_busy_or_not_running(self):
-        from unittest import mock
-        import sys
-        sys.path.insert(0, str(CODE / "lib"))
-        from sc import cron as cronmod
-        with mock.patch("sc.watch.is_running", return_value=True):
-            with mock.patch("sc.chef.status", return_value={"alive": True, "busy": False}):
-                self.assertIn("it is idle, so the watcher wakes it within one cycle", cronmod._chef_wake_note())
-            with mock.patch("sc.chef.status", return_value={"alive": True, "busy": True}):
-                self.assertIn("it is mid-turn", cronmod._chef_wake_note())
-            with mock.patch("sc.chef.status", return_value={"alive": False, "busy": None}):
-                self.assertIn("sous chef is not running", cronmod._chef_wake_note())
-
     def test_run_on_a_worker_job_says_what_it_launched(self):
         self.add_worker("inbox-scan", "--every", "12h")
         out = self.sc("cron", "run", "inbox-scan").stdout
@@ -2605,6 +2598,33 @@ class CronTests(ScTestCase):
         self.assertEqual(event["state"], "failed")
         self.assertIn("could not launch its session", event["text"])
         self.assertEqual(len(self.chef_wakes()), 1)
+
+
+class CronWakeNoteTests(RunningWatcherTestCase):
+    """What `sc cron run` says about waking sous chef, with a real watcher running. Whether the
+    watcher runs is told by its lock, so the test starts one rather than taking the lock itself."""
+
+    def set_chef(self, **fields):
+        path = self.state / "fake-runtime.json"
+        data = json.loads(path.read_text()) if path.exists() else {"sessions": {}, "wakes": []}
+        data["sessions"]["chef-1"] = {"alive": True, "busy": False, **fields}
+        path.write_text(json.dumps(data))
+
+    def test_run_says_when_sous_chef_is_idle_busy_or_not_running(self):
+        self.copy_sc("cron", "add", "tidy", "--every", "30m", "--target", "chef", stdin="tidy up").check_returncode()
+        self.copy_sc("hook", "chef-start", stdin=json.dumps({"session_id": "chef-1", "source": "startup"}),
+                     env={"SC_WATCH_DISABLE_ENSURE": "1"}).check_returncode()
+        self.set_chef()
+        self.assertIn("watcher running", self.copy_sc("watch", "--ensure", poll="3600").stdout)
+        # Its first cycle is over, so it will not write fake-runtime.json while the test does.
+        self.assertTrue(self.wait_for(lambda: (self.state / "watch.beat").exists()))
+        for fields, note in (({}, "it is idle, so the watcher wakes it within one cycle"),
+                             ({"busy": True}, "it is mid-turn"),
+                             ({"alive": False}, "sous chef is not running")):
+            self.set_chef(**fields)
+            out = self.copy_sc("cron", "run", "tidy", poll="3600")
+            self.assertEqual(out.returncode, 0, out.stderr)
+            self.assertIn(note, out.stdout)
 
 
 class WakeTests(unittest.TestCase):
