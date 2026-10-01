@@ -35,6 +35,7 @@ ALLOWED = {
     ("lib/sc/events.py", 'LEGACY_OWNER = "dylan"'),
     ("lib/sc/slack.py", 'LEGACY_FROM_OWNER = "from_dylan"'),
     ("src/events.ts", 'export const LEGACY_OWNER = "dylan";'),
+    ("src/slack.ts", 'export const LEGACY_FROM_OWNER = "from_dylan";'),
     ("tests/stored_values.py", 'LEGACY_OWNER = "dylan"'),
     ("tests/stored_values.py", 'LEGACY_FROM_OWNER = "from_dylan"'),
 }
