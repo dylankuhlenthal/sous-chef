@@ -40,7 +40,7 @@ Everything that belongs to the owner is in the data folder, reached from the cor
 
 ## Start sous chef
 
-Run `souschef` from any terminal. It uses the session registered in `my/state/chef.json` and the `claude agents` listing:
+Run `souschef` from any terminal. It uses the session registered in `my/state/chef.json` and the `claude agents` listing (the runtime's listing; tests run `souschef` on the fake runtime with `SC_CHEF_RUNTIME=fake`):
 
 | Situation | What `souschef` does |
 | --- | --- |
@@ -123,7 +123,9 @@ Sous chef needs none of these to run; they exist for the watcher's timing and fo
 | --- | --- |
 | `SC_WATCH_POLL`, `SC_SILENT_GRACE`, `SC_INBOX_GRACE`, `SC_INBOX_RINGS`, `SC_WAKE_RETRY`, `SC_GONE_GRACE`, `SC_STALE_BUSY` | The watcher's timing (`docs/domains/watcher.md`) |
 | `SC_IDENTITY_WAIT` | How long `sc report` waits for a just-launched session's record (default 25 seconds) |
-| `SC_TEST_HOME`, `SC_FAKE_NOW`, `SC_CHEF_RUNTIME`, `SC_WATCH_DISABLE_ENSURE`, `SC_FAKE_LAUNCH_FAILS`, `SC_FAKE_RESUME_FAILS` | Tests only: the data folder, the clock, the runtime recorded for sous chef, suppressing the real watcher, and making a fake launch or resume fail |
+| `SC_TEST_HOME`, `SC_FAKE_NOW`, `SC_CHEF_RUNTIME`, `SC_WATCH_DISABLE_ENSURE`, `SC_FAKE_LAUNCH_FAILS`, `SC_FAKE_RESUME_FAILS` | Tests only: the data folder, the clock, the runtime recorded for sous chef and the one `souschef` starts and resumes it on, suppressing the real watcher, and making a fake launch or resume fail |
+| `SC_TEST_CODE_FILE` | Tests only: one more file the watcher counts as its code (`watch.code_fingerprint`), so a test can make the watcher restart by changing that file |
+| `SC_UNDER_TEST` | The test suite only, never `sc`: the code root whose `sc` the suite tests (see "Tests" below) |
 
 Sessions are never launched with any of these; see "Which session is calling" in `docs/domains/sessions.md`.
 
@@ -134,7 +136,15 @@ cd ~/.sous-chef
 python3 -m unittest discover -s tests
 ```
 
-The suite runs the real `sc` command against a temporary home using the `fake` runtime, so it starts no Claude sessions. `WatcherCodeTests` starts real watcher processes from a temporary copy of the code and stops them afterwards; the live watcher is never touched. Claude Code behaviour is checked by hand; `docs/domains/sessions.md` lists what was verified.
+The suite runs the real `sc` command against a temporary home using the `fake` runtime, so it starts no Claude sessions. `WatcherCodeTests` and `CronWakeNoteTests` start real watcher processes from a temporary copy of the code and stop them afterwards; the live watcher is never touched. Claude Code behaviour is checked by hand; `docs/domains/sessions.md` lists what was verified.
+
+To run the suite against another code root (a folder with an executable `bin/sc` and `bin/souschef`, such as another checkout or a staged copy), name it with an absolute path:
+
+```sh
+SC_UNDER_TEST=<code root> PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests
+```
+
+The tests come from this checkout and the `sc` from the code root. Tests marked Python-only (the Python sc's internals) are skipped when that `sc` is not the Python one; `AGENTS.md` ("Testing") says how this is decided.
 
 The captured-output tests (`tests/test_captured.py`) compare output word for word with the files in `tests/captured/`, with paths, session ids and the fake relay's port replaced by placeholders. After a deliberate change to that output, run the suite with `SC_UPDATE_CAPTURED=1` to rewrite the files, and check their diff: it is the list of what changed for the owner.
 

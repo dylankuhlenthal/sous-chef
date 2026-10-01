@@ -190,7 +190,15 @@ Sessions launch in their kind's permission mode (`auto` for a kind that names no
 
 ## Testing
 
-`python3 -m unittest discover -s tests` runs the behaviour tests. They drive the real `sc` command against a temporary home with the `fake` runtime, so they start no Claude sessions. Behaviour that depends on Claude Code itself is verified by hand; see `docs/domains/sessions.md`.
+`PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests` runs the behaviour tests. They drive the real `sc` command against a temporary home with the `fake` runtime, so they start no Claude sessions. Behaviour that depends on Claude Code itself is verified by hand; see `docs/domains/sessions.md`.
+
+The suite tests the sc that `SC_UNDER_TEST` names: an absolute path to a code root, meaning a folder with an executable `bin/sc` and `bin/souschef` (a core checkout or a staged copy). Unset, it tests this checkout. To test another code root:
+
+```sh
+SC_UNDER_TEST=<code root> PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests
+```
+
+`tests/sc_under_test.py` is the only place that decides which sc is tested. Tests run `bin/sc` and `bin/souschef` as programs and check what they print and write, so the same tests apply whatever language the sc is written in. The exceptions are the tests of the Python sc's internals (the Claude runtime's parsing and skill lookup, the wake socket, and the arguments `souschef` gives Claude Code), marked `python_only`: they run only when the sc under test is the Python one (the first line of its `bin/sc` names python), and are skipped for any other, since they retire with that code. No other test may import from `lib/`. Tests that need a copy of the code make it with `core_paths.copy_code`, which copies the code under test, including a built core's `src/`, `dist/` and package files, and links its `node_modules`.
 
 `tests/test_captured.py` compares what sous chef prints and writes (briefs, `sc kinds`, `sc events`, the summary) word for word with `tests/captured/`. A change that alters that output fails it; rewrite the files with `SC_UPDATE_CAPTURED=1` and read the diff before committing. `tests/test_owner_neutral.py` fails when a core file names the first owner instead of using `my/owner.json`, and when a personal file is tracked in the core. The tests run as a neutral owner (Alex), and tests that copy the code copy only the core's path list (`tests/core_paths.py`), so the suite passes in the core as published, which ships only the core's kinds. A new file at the top of the core, or a new core kind, goes on that list.
 

@@ -105,7 +105,7 @@ Scheduled worker jobs launch through `ops.spawn` without a flag, so a job takes 
 
 A session keeps its permission mode when resumed. `sc resume` passes no flags (below), and Claude Code reuses the flags it saved at launch.
 
-Sous chef's own session is not spawned: `souschef` starts it with `claude_bg.start_named`, passing `souschef.PERMISSIONS`, which is `bypass`, through the same mapping. See decision 0015 (sous chef itself runs in bypass mode) and "Start sous chef" in `docs/operations/running.md`.
+Sous chef's own session is not spawned: `souschef` starts it with the runtime's `start_named` (`claude_bg.start_named` for real, the fake runtime's in tests, chosen by `SC_CHEF_RUNTIME`), passing `souschef.PERMISSIONS`, which is `bypass`, through the same mapping. See decision 0015 (sous chef itself runs in bypass mode) and "Start sous chef" in `docs/operations/running.md`.
 
 ## Which session is calling
 
@@ -163,7 +163,7 @@ How it is shown (`summary.sessions_table`, `summary.activity_line`, `cli.cmd_sta
 - `sc status <id>` prints the detail, the in-flight count, and every running entry with its kind and how long ago it started.
 - A stopped session shows none of it, since the file may describe its last run.
 
-The job file is internal to Claude Code and undocumented; these fields were read live from version 2.1.278 and may change without warning. Every field is optional: when one is missing or malformed, that part is left out, and when the file is missing, unreadable, or names another session, there is no activity and both commands print what they did before. Covered by `ActivityListingTests` and `ClaudeRuntimeParsingTests` in `tests/test_sc.py`.
+The job file is internal to Claude Code and undocumented; these fields were read live from version 2.1.278 and may change without warning. Every field is optional: when one is missing or malformed, that part is left out, and when the file is missing, unreadable, or names another session, there is no activity and both commands print what they did before. Covered by `ActivityListingTests` and `ClaudeRuntimeParsingTests` (Python-only: it tests the Python Claude runtime's internals) in `tests/test_sc.py`.
 
 ## Claude Code behaviour this relies on
 
