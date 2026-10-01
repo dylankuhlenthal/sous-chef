@@ -6,7 +6,7 @@ There is no server or daemon to install. Everything is either a file in one of t
 
 ## Two folders joined by one link
 
-The **core** is the code everyone shares (the sous chef repo): `bin/`, `src/` (the code, TypeScript on Node 22 or later, compiled into `dist/` by `npm run build`), `lib/` (the old Python code, kept until TRV-1157 removes it), `templates/`, `docs/`, `tests/`, the core kinds, `AGENTS.md`, `.agents/` and `install.sh`. It runs from `~/.sous-chef`, because Claude Code's trust, its saved conversations and every brief's `sc` path are keyed to that path.
+The **core** is the code everyone shares (the sous chef repo): `bin/`, `src/` (the code, TypeScript on Node 22 or later, compiled into `dist/` by `npm run build`), `lib/` (the old Python code, kept until TRV-1157, the last step of the rewrite, removes it), `templates/`, `docs/`, `tests/`, the core kinds, `AGENTS.md`, `.agents/` and `install.sh`. It runs from `~/.sous-chef`, because Claude Code's trust, its saved conversations and every brief's `sc` path are keyed to that path.
 
 The **data folder** is the owner's own: their memory, cron jobs, kinds, owner file, instructions, settings, `state/` and `.env`. It lives wherever the owner chose at install (by default `~/.my-sous-chef`) and may be a private git repo of its own, which the watcher keeps committed and pushed.
 

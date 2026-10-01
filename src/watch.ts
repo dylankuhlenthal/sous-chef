@@ -497,7 +497,7 @@ function log(msg: string): void {
 
 // A SIGTERM (sent by `ensure` to replace this watcher) ends the loop between cycles,
 // never inside one, so a cycle's events and its watch.json are always written together.
-const loop = { inCycle: false, stop: false, release: null as (() => Promise<void>) | null };
+const loop = { inCycle: false, stop: null as string | null, release: null as (() => Promise<void>) | null };
 
 async function exitBetweenCycles(why: string): Promise<never> {
   log(why);
@@ -511,7 +511,7 @@ export async function runForever(): Promise<number> {
   // not been touched for lock.STALE_MS, so a new watcher waits a little longer than that.
   const release = await holdLock(lockPath(), 12, (err) => {
     log(`the watcher's lock was lost (${err.message}); this watcher stops after its cycle`);
-    loop.stop = true;
+    loop.stop = "lock lost";
     // Asleep between cycles: stop now, so it never runs a cycle beside the watcher that took the lock.
     if (!loop.inCycle) void exitBetweenCycles("watcher stopped between cycles (lock lost)");
   });
@@ -532,7 +532,7 @@ export async function runForever(): Promise<number> {
   writeJson(codePath(), { pid: process.pid, code: loaded, poll, started_at: realNow() });
   log(`watcher started (pid ${process.pid}, code ${loaded})`);
   process.on("SIGTERM", () => {
-    loop.stop = true;
+    loop.stop ??= "SIGTERM";
     if (!loop.inCycle) void exitBetweenCycles("watcher stopped between cycles (SIGTERM)");
   });
   let refused: string | null = null;
@@ -546,7 +546,7 @@ export async function runForever(): Promise<number> {
     }
     fs.writeFileSync(path.join(stateDir(), "watch.beat"), String(realNow()));
     loop.inCycle = false;
-    if (loop.stop) await exitBetweenCycles("watcher stopped between cycles (SIGTERM)");
+    if (loop.stop) await exitBetweenCycles(`watcher stopped between cycles (${loop.stop})`);
     refused = await restartIfCodeChanged(loaded, refused);
     await sleep(poll);
   }

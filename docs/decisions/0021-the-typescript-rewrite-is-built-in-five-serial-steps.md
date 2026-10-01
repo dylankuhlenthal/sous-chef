@@ -14,4 +14,4 @@ Step 2 is one pull request built in internal commits (tooling, foundations, comm
 Set aside: one issue with one very large pull request (too big to review well), and a Linear project (more structure than one repo needs). The steps run one at a time because this is the first orchestrate run on this repo and each step builds on the one before.
 
 ## Consequences
-Between steps 2 and 3, the TypeScript sc runs only on the fake runtime: its Claude runtime (`src/runtimes/claude-bg.ts`) refuses everything except opening a session and the skill lookup. Nothing runs the branch live until the switch-over (step 4); until step 5 the Python code stays in `lib/` and the behaviour suite stays in Python, run against the TypeScript sc.
+Between steps 2 and 3, the TypeScript sc runs only on the fake runtime: its Claude runtime (`src/runtimes/claude-bg.ts`) refuses everything except the skill lookup and formatting the `claude attach` command. Nothing runs the branch live until the switch-over (step 4); until step 5 the Python code stays in `lib/` and the behaviour suite stays in Python, run against the TypeScript sc.

@@ -14,4 +14,4 @@ State files and printed JSON are written the way Python wrote them (`src/pyjson.
 Set aside: keeping Python and calling Porch's command line from it (a second language for the same behaviour, and a process per call).
 
 ## Consequences
-Installing sous chef needs Node 22 or later and `npm`, and an update needs `npm ci` when `package-lock.json` changed and a build (decision 0023). Python stays a development dependency only while the behaviour suite is still in Python (until TRV-1157). `sc cron list` names time zones as Node's `Intl` does, so outside UTC it can print `GMT+2` where Python printed `SAST`.
+Installing sous chef needs Node 22 or later and `npm`, and an update needs `npm ci` when `package-lock.json` changed and a build (decision 0023, the compiled build refused when stale). Python stays a development dependency only while the behaviour suite is still in Python (until TRV-1157 ports the suite to vitest and deletes the Python code). `sc cron list` names time zones as Node's `Intl` does, so outside UTC it can print `GMT+2` where Python printed `SAST`.

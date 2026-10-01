@@ -56,7 +56,7 @@ The runtime's status can now include `activity`, with `in_flight`: how many suba
 
 This only holds an event back; it never cancels one. With no activity (the runtime cannot read it, or its fields have changed), `in_flight` is 0 and `in_flight_seen_at` is never set, so check 3 behaves exactly as it did before.
 
-**What counts as in flight, and why.** For Claude sessions, `in_flight` is `inFlight.tasks` from Claude Code's job file (`~/.claude/jobs/<short id>/state.json`), read by `claude_bg._activity`. That file is internal to Claude Code and undocumented; the fields were read live from version 2.1.278 and may change without warning. `inFlight` also has `queued` and `drainableMonitors`, which are deliberately not counted:
+**What counts as in flight, and why.** For Claude sessions, `in_flight` is `inFlight.tasks` from Claude Code's job file (`~/.claude/jobs/<short id>/state.json`), read by `claude_bg._activity` (the Python Claude runtime; the TypeScript one comes with TRV-1155, the Claude runtime on Porch). That file is internal to Claude Code and undocumented; the fields were read live from version 2.1.278 and may change without warning. `inFlight` also has `queued` and `drainableMonitors`, which are deliberately not counted:
 
 - `queued` is not work running. It was seen at 1 on a session whose job file said it was finished (`state: done`, `tempo: idle`), so counting it would hold back a silent stop for a session with nothing running.
 - `drainableMonitors` was never seen above 0, so what it counts was not observed. A monitor can also watch something indefinitely, which would hold back the event until the 2-hour limit every time.

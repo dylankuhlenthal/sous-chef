@@ -15,7 +15,7 @@ git clone <the sous chef core repo> ~/.sous-chef
 ~/.sous-chef/install.sh
 ```
 
-`install.sh` checks that `node`, `npm`, `git` and `claude` are on `PATH` (naming every missing one), that `node` is version 22 or later, and says which Node it found (`using Node v22.14.0 at <path>; hooks and the watcher run this Node`). It then brings the install up to date, doing only what is out of date: `npm ci` when `node_modules/.package-lock.json` is missing or older than `package-lock.json`, and `npm run build` when `bin/sc` says the build is missing or stale. It refuses to reinstall a `node_modules` that is a link to another install. Last, it runs `sc setup` (`src/setup.ts`), which asks:
+`install.sh` checks that `node`, `npm`, `git` and `claude` are on `PATH` (naming every missing one), that `node` is version 22 or later, and says which Node it found (`using Node v22.14.0 at <path>; hooks and the watcher run this Node`). It then brings the install up to date, doing only what is out of date. When `bin/sc --help` fails, it runs `npm ci` if `node_modules/.package-lock.json` is missing or `bin/sc` says the dependencies are older than `package-lock.json`, then `npm run build` if `bin/sc` still fails. It refuses to reinstall a `node_modules` that is a link to another install. Last, it runs `sc setup` (`src/setup.ts`), which asks:
 
 | Question | What happens |
 | --- | --- |
@@ -38,7 +38,7 @@ Sessions do not need `sc` on `PATH`: their brief gives its full path.
 - a file under `src/`, or `tsconfig.json` or `tsconfig.build.json`, newer than the build and with different content from what the build recorded in the stamp: `run: cd <core> && npm run build`;
 - `node_modules/.package-lock.json` missing, or older than a changed `package-lock.json`: `run: cd <core> && npm ci && npm run build`.
 
-At sous chef's startup hook the same text reaches sous chef as its startup context instead, so it can tell you. While the build is stale no hook runs, including the one that blocks edits under `state/`. Why it works this way: decision 0023 (compiled into `dist/`, refused when stale).
+At sous chef's startup hook the same text reaches sous chef as its startup context instead, so it can tell you. While the build is stale every other hook fails with the same text instead of running, including the one that blocks edits under `state/`, so those edits are not blocked. Why it works this way: decision 0023 (compiled into `dist/`, refused when stale).
 
 So after every pull of the core, update it with one step:
 

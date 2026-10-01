@@ -23,7 +23,7 @@ Each session has a folder `my/state/sessions/<id>/` (in the data folder). The id
 
 A kind is a markdown file named `<kind>.md`. Its front matter has a `description`, `starts_waiting_on` (`owner` or `agent`; the owner's name in lower case is accepted for `owner`), and optionally `permissions` (the session's default permission mode; see "Permissions" below) and `skill` (the one skill its instructions tell the session to run; see "Skills" below). Its body is inserted into the brief. `kinds.load` reads and checks it.
 
-Kinds come from two folders, looked up in this order (`kinds._folders`, `kinds._find`):
+Kinds come from two folders, looked up in this order (`folders` and `find` in `src/kinds.ts`):
 
 1. **User kinds**: `my/kinds/`, in the owner's data folder (`util.userKindsDir()`). These belong to the person running sous chef.
 2. **Core kinds**: `kinds/` in the core (`util.kindsDir()`). These ship with sous chef.
@@ -124,7 +124,7 @@ For the same reason, the core is always the folder `sc` is installed in (`util.C
 3. Links `.env*` files from `<root>/.local/` into the worktree with relative symlinks, and says when there are none.
 4. Records the worktree in `my/state/worktrees.json`. It does not install dependencies.
 
-Every change to that record (`sc worktree`, a spawn that claims a worktree, a cleanup or failed launch that frees one) first drops entries whose folder no longer exists and that no active session holds (`worktrees._prune`). So a worktree removed by hand leaves the record the next time it changes. An entry whose folder exists is never dropped, and neither is one an active session holds; that one goes once the session is cleaned up.
+Every change to that record (`sc worktree`, a spawn that claims a worktree, a cleanup or failed launch that frees one) first drops entries whose folder no longer exists and that no active session holds (`prune` in `src/worktrees.ts`). So a worktree removed by hand leaves the record the next time it changes. An entry whose folder exists is never dropped, and neither is one an active session holds; that one goes once the session is cleaned up.
 
 `--base` can be any branch that exists on `origin`, not just the default branch, so a session can start from someone else's branch (for example the head of a pull request under review).
 

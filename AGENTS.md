@@ -23,7 +23,7 @@ Sous chef is two folders. This one is the **core**: the shared code, the same fo
 The core:
 
 - `bin/sc`, `src/`: the `sc` command. Run `sc --help`. `bin/sc` and `bin/souschef` (how the owner opens you from any terminal) are small launchers: they check Node and the build, then run the compiled code in `dist/` (gitignored), which `npm run build` makes from `src/`. They refuse a build that is missing or older than `src/`, with the command that fixes it. `package.json` lists the dependencies and scripts. `install.sh`: sets up an install (it brings the dependencies and the build up to date, then runs `sc setup`).
-- `lib/sc/`: the old Python sc, no longer run by anything; TRV-1157 removes it.
+- `lib/sc/`: the old Python sc, no longer run by anything; TRV-1157 (porting the tests to vitest and deleting the Python code) removes it.
 - `kinds/`: the core kinds, one file per session kind. `templates/worker-brief.md`: the instructions every session gets.
 - `docs/`: how sous chef works, filed by the documentation standards in `docs/patterns/documentation.md` (read it before changing docs). `tests/`: the test suite.
 
