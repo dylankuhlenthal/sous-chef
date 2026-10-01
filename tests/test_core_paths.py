@@ -16,7 +16,7 @@ class CopyCodeTests(unittest.TestCase):
             root, dest = Path(tmp) / "root", Path(tmp) / "copy"
             files = ("bin/sc", "lib/sc/x.py", "lib/sc/__pycache__/x.pyc", "kinds/general.md", "kinds/mine.md",
                      "templates/t.md", "install.sh", "src/a.ts", "dist/a.js", "dist/sub/b.js", "package.json",
-                     "node_modules/pkg/index.js")
+                     "package-lock.json", "node_modules/pkg/index.js")
             for n, rel in enumerate(files):
                 path = root / rel
                 path.parent.mkdir(parents=True, exist_ok=True)
@@ -28,12 +28,11 @@ class CopyCodeTests(unittest.TestCase):
                 self.assertEqual((dest / rel).read_text(), rel)
             self.assertFalse((dest / "lib/sc/__pycache__").exists())
             self.assertFalse((dest / "kinds/mine.md").exists())
-            for rel in ("src/a.ts", "dist/a.js", "dist/sub/b.js", "package.json"):
+            for rel in ("src/a.ts", "dist/a.js", "dist/sub/b.js", "package.json", "package-lock.json"):
                 self.assertEqual((dest / rel).read_text(), rel)
                 self.assertEqual((dest / rel).stat().st_mtime, (root / rel).stat().st_mtime, rel)
             self.assertTrue((dest / "node_modules").is_symlink())
             self.assertEqual(os.readlink(dest / "node_modules"), str(root / "node_modules"))
-            self.assertFalse((dest / "package-lock.json").exists())
 
 
 if __name__ == "__main__":
