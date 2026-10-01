@@ -38,7 +38,8 @@ describe("withLock", () => {
       await new Promise((r) => setTimeout(r, 50));
       order.push(`out ${n}`);
     })));
-    expect(order).toEqual(["in 1", "out 1", "in 2", "out 2"]);
+    // Either may get the lock first (the two mkdir calls race); they must never overlap.
+    expect([["in 1", "out 1", "in 2", "out 2"], ["in 2", "out 2", "in 1", "out 1"]]).toContainEqual(order);
     expect(fs.existsSync(`${p}.lock`)).toBe(false);
     expect(fs.existsSync(p)).toBe(false); // the lock is the folder <path>.lock, never <path> itself
   });
