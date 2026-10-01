@@ -34,6 +34,8 @@ EXCLUDED_FILES = ("tests/test_owner_neutral.py",)
 ALLOWED = {
     ("lib/sc/events.py", 'LEGACY_OWNER = "dylan"'),
     ("lib/sc/slack.py", 'LEGACY_FROM_OWNER = "from_dylan"'),
+    ("tests/stored_values.py", 'LEGACY_OWNER = "dylan"'),
+    ("tests/stored_values.py", 'LEGACY_FROM_OWNER = "from_dylan"'),
 }
 
 
@@ -51,7 +53,7 @@ class OwnerNeutralTests(unittest.TestCase):
         found = []
         files = core_files()
         self.assertIn("AGENTS.md", files)
-        self.assertIn("lib/sc/slack.py", files)
+        self.assertIn("bin/sc", files)
         for rel in files:
             try:
                 text = (ROOT / rel).read_text()

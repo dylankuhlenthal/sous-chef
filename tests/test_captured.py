@@ -22,7 +22,8 @@ from pathlib import Path
 import core_paths
 import fake_relay
 from fake_relay import ALEX, BOT
-from test_sc import ROOT, ScTestCase
+from sc_under_test import CODE
+from test_sc import ScTestCase
 
 CAPTURED = Path(__file__).resolve().parent / "captured"
 
@@ -41,7 +42,7 @@ class CapturedTestCase(ScTestCase):
     def normalise(self, text):
         for i, sid in enumerate(self.sids, 1):
             text = text.replace(sid, f"<SID{i}>")
-        for path, name in ((self.home, "<HOME>"), (self.work, "<WORK>"), (ROOT, "<CODE>")):
+        for path, name in ((self.home, "<HOME>"), (self.work, "<WORK>"), (CODE, "<CODE>")):
             text = text.replace(str(Path(path).resolve()), name).replace(str(path), name)
         return re.sub(r"http://127\.0\.0\.1:\d+", "<RELAY>", text)
 
@@ -75,7 +76,7 @@ class CapturedSessionTests(CapturedTestCase):
 
     def test_sc_kinds(self):
         """Through a copy of the core as published, which ships only its own kinds (decision 0020)."""
-        code = core_paths.copy_code(Path(self.tmp.name) / "code")
+        code = core_paths.copy_code(Path(self.tmp.name) / "code", root=CODE)
         out = subprocess.run([str(code / "bin" / "sc"), "kinds", "--runtime", "fake"], capture_output=True, text=True,
                              env={**self.base_env, "SC_FAKE_NOW": str(self.clock)}, check=True).stdout
         self.assertCaptured("kinds.txt", out)
@@ -141,7 +142,7 @@ class CapturedSummaryTests(CapturedTestCase):
 
     def test_the_first_prompt_souschef_starts_sous_chef_with(self):
         code = "import sys; sys.path.insert(0, sys.argv[1]); from sc import souschef; print(souschef.first_prompt())"
-        out = subprocess.run([sys.executable, "-c", code, str(ROOT / "lib")], capture_output=True, text=True,
+        out = subprocess.run([sys.executable, "-c", code, str(CODE / "lib")], capture_output=True, text=True,
                              env={**self.base_env}, check=True).stdout
         self.assertCaptured("souschef-first-prompt.txt", out)
 

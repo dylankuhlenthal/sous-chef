@@ -12,10 +12,8 @@ import unittest
 from pathlib import Path
 
 import core_paths
-from lib_setup import LEGACY_OWNER
-
-ROOT = Path(__file__).resolve().parents[1]
-SC = ROOT / "bin" / "sc"
+from sc_under_test import CODE, IS_PYTHON, REPO, SC, SOUSCHEF, python_only  # noqa: F401
+from stored_values import LEGACY_OWNER
 
 
 class ScTestCase(unittest.TestCase):
@@ -109,7 +107,7 @@ class SpawnTests(ScTestCase):
         sid = self.spawn()
         launched = self.fake_state()["sessions"][sid]
         self.assertNotIn("SC_SESSION_ID", launched["env"])
-        self.assertIn(str(ROOT / "bin"), launched["env"]["PATH"].split(":"))
+        self.assertIn(str(CODE / "bin"), launched["env"]["PATH"].split(":"))
         self.assertEqual(sorted(launched["settings"]["hooks"]),
                          ["PreToolUse", "SessionStart", "Stop", "UserPromptSubmit"])
 
@@ -117,7 +115,7 @@ class SpawnTests(ScTestCase):
         out = self.sc("spawn", "--kind", "general", "--title", "x", "--cwd", str(self.home),
                       "--runtime", "fake", stdin="task", ok=False)
         self.assertIn("inside the sous chef data folder", out.stderr)
-        out = self.sc("spawn", "--kind", "general", "--title", "x", "--cwd", str(ROOT / "docs"),
+        out = self.sc("spawn", "--kind", "general", "--title", "x", "--cwd", str(CODE / "kinds"),
                       "--runtime", "fake", stdin="task", ok=False)
         self.assertIn("inside the sous chef code folder", out.stderr)
         out = self.sc("spawn", "--kind", "general", "--title", "x", "--cwd", str(self.work),
@@ -164,7 +162,7 @@ class CodeCopyTestCase(ScTestCase):
 
     def setUp(self):
         super().setUp()
-        self.code = core_paths.copy_code(Path(self.tmp.name) / "code")
+        self.code = core_paths.copy_code(Path(self.tmp.name) / "code", root=CODE)
 
     def copy_sc(self, *args, stdin=None, ok=True, env=None):
         env = {**self.base_env, "SC_FAKE_NOW": str(self.clock), **(env or {})}
@@ -226,7 +224,7 @@ class KindPermissionsTests(CodeCopyTestCase):
     def test_the_core_ships_only_general_and_investigate_neither_in_bypass(self):
         """Run against the core as published: the owner's kinds are theirs, in my/kinds (decision 0020)."""
         self.assertEqual(core_paths.core_kind_names(), ["general", "investigate"])
-        code = core_paths.copy_code(Path(self.tmp.name) / "core")
+        code = core_paths.copy_code(Path(self.tmp.name) / "core", root=CODE)
         out = subprocess.run([str(code / "bin" / "sc"), "kinds", "--runtime", "fake"], capture_output=True,
                              text=True, env={**self.base_env, "SC_FAKE_NOW": str(self.clock)}).stdout.splitlines()
         self.assertEqual([l.split()[0] for l in out if l and l[0] != " "], ["general", "investigate"])
@@ -1450,7 +1448,7 @@ class WatcherCodeTests(ScTestCase):
 
     def setUp(self):
         super().setUp()
-        self.code = core_paths.copy_code(Path(self.tmp.name) / "code")
+        self.code = core_paths.copy_code(Path(self.tmp.name) / "code", root=CODE)
         self.state = self.home / "state"
 
     def tearDown(self):
@@ -1633,7 +1631,7 @@ class HookTests(ScTestCase):
 
     def _code_repo(self, name):
         """A copy of the core's code, committed in a git repo of its own."""
-        repo = core_paths.copy_code(Path(self.tmp.name) / name)
+        repo = core_paths.copy_code(Path(self.tmp.name) / name, root=CODE)
         for args in (("init", "-q"), ("config", "user.email", "t@t"), ("config", "user.name", "t"),
                      ("add", "-A"), ("commit", "-qm", "init")):
             subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, check=True)
@@ -1763,7 +1761,7 @@ class WorktreeTests(ScTestCase):
 class SouschefDecisionTests(unittest.TestCase):
     def setUp(self):
         import sys
-        sys.path.insert(0, str(ROOT / "lib"))
+        sys.path.insert(0, str(CODE / "lib"))
         from sc import souschef
         self.decide = souschef.decide
 
@@ -2023,8 +2021,9 @@ class OwnerTests(ScTestCase):
             self.assertIn("starts waiting on agent", self.sc("kinds", "--runtime", "fake").stdout)
 
     def test_the_owner_file_is_kept_by_the_data_folder_and_ignored_by_the_core(self):
-        self.assertIn("/owner.json", (ROOT / ".gitignore").read_text().split())
-        from lib_setup import DATA_GITIGNORE
+        self.assertIn("/owner.json", (REPO / ".gitignore").read_text().split())
+        sys.path.insert(0, str(CODE / "lib"))
+        from sc.setup import DATA_GITIGNORE
         self.assertNotIn("owner.json", DATA_GITIGNORE)
 
 
@@ -2049,7 +2048,7 @@ class OwnerNameTests(ScTestCase):
         for kind in core_paths.core_kind_names() + ["pairing-page"]:
             brief = self.brief(self.spawn(kind=kind, title=f"{kind} task"))
             self.assertIn("**sous chef**, Sam's agent that keeps track of Sam's work", brief)
-            self.assertNotIn("alex", brief.replace(str(ROOT), "<CODE>").lower())  # the checkout's own path aside
+            self.assertNotIn("alex", brief.replace(str(CODE), "<CODE>").lower())  # the checkout's own path aside
             self.assertNotIn("{{", brief)
         self.assertIn("Open the page for\nSam.", self.brief(self.spawn(kind="pairing-page", title="again")))
 
@@ -2135,7 +2134,7 @@ class OwnerNameTests(ScTestCase):
     def test_the_first_prompt_waits_for_the_owner(self):
         self.become("Sam", "sam/")
         code = "import sys; sys.path.insert(0, sys.argv[1]); from sc import souschef; print(souschef.first_prompt())"
-        out = subprocess.run([sys.executable, "-c", code, str(ROOT / "lib")], capture_output=True, text=True,
+        out = subprocess.run([sys.executable, "-c", code, str(CODE / "lib")], capture_output=True, text=True,
                              env=self.base_env, check=True).stdout
         self.assertTrue(out.strip().endswith("Then wait for Sam."))
 
@@ -2145,7 +2144,7 @@ class OwnerKindTests(ScTestCase):
 
     def setUp(self):
         super().setUp()
-        self.code = core_paths.copy_code(Path(self.tmp.name) / "code")
+        self.code = core_paths.copy_code(Path(self.tmp.name) / "code", root=CODE)
 
     def copy_sc(self, *args, ok=True):
         out = subprocess.run([str(self.code / "bin" / "sc"), *args], input="do it", capture_output=True, text=True,
@@ -2398,7 +2397,7 @@ class CronTests(ScTestCase):
     def test_run_says_when_sous_chef_is_idle_busy_or_not_running(self):
         from unittest import mock
         import sys
-        sys.path.insert(0, str(ROOT / "lib"))
+        sys.path.insert(0, str(CODE / "lib"))
         from sc import cron as cronmod
         with mock.patch("sc.watch.is_running", return_value=True):
             with mock.patch("sc.chef.status", return_value={"alive": True, "busy": False}):
@@ -2562,7 +2561,7 @@ class WakeTests(unittest.TestCase):
 
     def setUp(self):
         import sys
-        sys.path.insert(0, str(ROOT / "lib"))
+        sys.path.insert(0, str(CODE / "lib"))
         from sc import wake
         self.wake = wake
 
@@ -2719,7 +2718,7 @@ class ClaudeRuntimeParsingTests(unittest.TestCase):
 
     def setUp(self):
         import sys
-        sys.path.insert(0, str(ROOT / "lib"))
+        sys.path.insert(0, str(CODE / "lib"))
         from sc.runtimes import claude_bg
         self.claude_bg = claude_bg
 
