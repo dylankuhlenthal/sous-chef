@@ -244,6 +244,28 @@ describe("on Porch's Claude adapter, with canned listings", () => {
     expect((await rt.status(rec)).turns).toBeUndefined();
   });
 
+  // Matches the Python runtime, whose listing had no row for the old id and fell back to the short id.
+  it("reads a worker as running after /clear: old session id ended (clear), same short id running under a new id", async () => {
+    const NEW = "22222222-2222-3333-4444-555555555555";
+    const store = new RecordStore(sessionsDir(env));
+    await store.updateInside("claude", SID, { pid: 4242, status: "idle", data: { shortId: SHORT } });
+    await store.updateInside("claude", SID, { status: "ended", endedAt: T2, endReason: "clear" });
+    const rt = setup([row({ sessionId: NEW, status: "busy" })]);
+    expect(await rt.status(rec)).toMatchObject({ alive: true, busy: true, pid: 4242 });
+    const rows = await rt.listing();
+    expect(rows[SID]).toMatchObject({ alive: false });
+    expect(await rt.status(rec, rows)).toMatchObject({ alive: true, busy: true, pid: 4242 });
+  });
+
+  it("keeps an ended session stopped when nothing runs under its short id", async () => {
+    const store = new RecordStore(sessionsDir(env));
+    await store.updateInside("claude", SID, { pid: 4242, status: "idle", data: { shortId: SHORT } });
+    await store.updateInside("claude", SID, { status: "ended", endedAt: T2, endReason: "idle" });
+    const rt = setup([]);
+    expect(await rt.status(rec)).toMatchObject({ alive: false, stopped: { status: "ended", reason: "idle" } });
+    expect(await rt.status(rec, await rt.listing())).toMatchObject({ alive: false, stopped: { status: "ended", reason: "idle" } });
+  });
+
   // 4. Pinned on purpose: looks wrong, is right.
   it("reads an ended session, whatever the reason, as not alive and nothing more", async () => {
     // `ended` also covers Claude Code stopping an idle session (endReason idle) and a SIGTERM

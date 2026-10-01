@@ -300,9 +300,23 @@ export function createClaudeRuntime(options: ClaudeRuntimeOptions = {}): Runtime
 
     async status(rec, rows) {
       const handle = or(rec.handle, {}) as Dict;
-      if (rows) return statusOf(lookup(rows, handle.session_id, handle.short_id));
-      const id = or(handle.session_id, handle.short_id);
-      return statusOf(typeof id === "string" && id ? await observe(id) : null);
+      // By session id first, then by short id when that session is not running. After
+      // `/clear` Claude Code goes on in the same process under a new session id, and Porch
+      // shows the old id as ended (reason `clear`) while the short id is still running, as
+      // the Python runtime read it. A stopped session with nothing running under its short
+      // id stays stopped.
+      const sid = typeof handle.session_id === "string" && handle.session_id ? handle.session_id : null;
+      const short = typeof handle.short_id === "string" && handle.short_id ? handle.short_id : null;
+      const running = (obs: Observation | null) => obs !== null && !notRunning(obs.status);
+      if (rows) {
+        const bySid = lookup(rows, sid);
+        const byShort = lookup(rows, short);
+        return statusOf(running(bySid) || !running(byShort) ? (bySid ?? byShort) : byShort);
+      }
+      const bySid = sid ? await observe(sid) : null;
+      if (running(bySid) || !short) return statusOf(bySid);
+      const byShort = await observe(short);
+      return statusOf(running(byShort) ? byShort : (bySid ?? byShort));
     },
 
     async launch(rec, prompt, env, settings) {
