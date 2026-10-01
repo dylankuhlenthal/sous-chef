@@ -100,14 +100,8 @@ class CoreContentsTests(unittest.TestCase):
             out = subprocess.run(["git", "-C", str(ROOT), "check-ignore", "-q", "--no-index", probe])
             self.assertEqual(out.returncode, 0, f"the core's .gitignore does not ignore {name}")
 
-    # TEMPORARY, for the TypeScript switch-over (TRV-1156): its one-off script and rehearsal live in
-    # switch-over/ on that branch only. The branch's last commit deletes both switch-over/ and this
-    # allowance, so neither reaches main's tree (docs/decisions/0028).
-    SWITCH_OVER_ALLOWANCE = ("switch-over/",)
-
     def test_every_tracked_file_is_core(self):
-        outside = [f for f in core_paths.listed_files(ROOT)
-                   if not core_paths.is_core(f) and not f.startswith(self.SWITCH_OVER_ALLOWANCE)]
+        outside = [f for f in core_paths.listed_files(ROOT) if not core_paths.is_core(f)]
         self.assertEqual(outside, [], "add these to the core path list (tests/core_paths.py) or the owner's data")
 
 
