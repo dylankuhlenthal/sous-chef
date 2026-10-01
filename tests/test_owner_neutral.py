@@ -34,6 +34,7 @@ EXCLUDED_FILES = ("tests/test_owner_neutral.py",)
 ALLOWED = {
     ("lib/sc/events.py", 'LEGACY_OWNER = "dylan"'),
     ("lib/sc/slack.py", 'LEGACY_FROM_OWNER = "from_dylan"'),
+    ("src/events.ts", 'export const LEGACY_OWNER = "dylan";'),
     ("tests/stored_values.py", 'LEGACY_OWNER = "dylan"'),
     ("tests/stored_values.py", 'LEGACY_FROM_OWNER = "from_dylan"'),
 }
