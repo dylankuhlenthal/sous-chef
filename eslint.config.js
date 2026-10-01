@@ -10,4 +10,9 @@ export default tseslint.config(
       "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
     },
   },
+  {
+    // The launchers: plain JavaScript run by Node before anything is compiled.
+    files: ["bin/sc", "bin/souschef"],
+    languageOptions: { sourceType: "module", globals: { process: "readonly", console: "readonly", globalThis: "readonly" } },
+  },
 );

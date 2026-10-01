@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { holdLock, isHeld, STALE_MS, withLock } from "../src/lock.js";
+import { isRunning } from "../src/watch.js";
 
 const tmps: string[] = [];
 afterEach(() => {
@@ -66,4 +67,26 @@ describe("the watcher's lock", () => {
     await release!();
     expect(await isHeld(p)).toBe(false);
   }, 20000);
+});
+
+describe("isRunning", () => {
+  it("is false while a dead watcher's lock still looks held, and true for a live one", async () => {
+    const home = tmpdir();
+    const saved = process.env.SC_TEST_HOME;
+    process.env.SC_TEST_HOME = home;
+    try {
+      const state = path.join(home, "state");
+      fs.mkdirSync(state);
+      const child = await holder(path.join(state, "watch.lock"));
+      fs.writeFileSync(path.join(state, "watch.pid"), String(child.pid));
+      expect(await isRunning()).toBe(true);
+      child.kill("SIGKILL");
+      await new Promise((r) => child.once("exit", r));
+      expect(await isHeld(path.join(state, "watch.lock"))).toBe(true); // not stale yet
+      expect(await isRunning()).toBe(false);
+    } finally {
+      if (saved === undefined) delete process.env.SC_TEST_HOME;
+      else process.env.SC_TEST_HOME = saved;
+    }
+  });
 });
