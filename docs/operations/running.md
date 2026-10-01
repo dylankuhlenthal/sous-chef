@@ -2,7 +2,7 @@
 
 ## Requirements
 
-- macOS or Linux with Python 3 and its standard library only (developed and tested on 3.11; nothing needs a newer version).
+- macOS or Linux with Node 22 or later and `npm` (developed and tested on Node 22.14). The one runtime dependency, `proper-lockfile`, is installed by `npm ci` into the core's `node_modules/`.
 - Claude Code with background sessions (`claude --bg`), logged in. Verified with 2.1.274.
 - `git`, for `sc worktree`, for `sc cleanup`'s unlanded-work check, and for keeping the data folder in a git repo.
 
@@ -15,7 +15,7 @@ git clone <the sous chef core repo> ~/.sous-chef
 ~/.sous-chef/install.sh
 ```
 
-`install.sh` checks that `python3`, `git` and `claude` are on `PATH`, then runs `sc setup` (`lib/sc/setup.py`), which asks:
+`install.sh` checks that `node`, `npm`, `git` and `claude` are on `PATH` (naming every missing one), that `node` is version 22 or later, and says which Node it found (`using Node v22.14.0 at <path>; hooks and the watcher run this Node`). It then brings the install up to date, doing only what is out of date: `npm ci` when `node_modules/.package-lock.json` is missing or older than `package-lock.json`, and `npm run build` when `bin/sc` says the build is missing or stale. It refuses to reinstall a `node_modules` that is a link to another install. Last, it runs `sc setup` (`src/setup.ts`), which asks:
 
 | Question | What happens |
 | --- | --- |
@@ -29,6 +29,26 @@ Then it makes the `my` link in the core, links `sc` and `souschef` into `~/.loca
 Claude Code only reads `.agents/settings.local.json` in a folder you have trusted, so if you run plain `claude` in the core, accept its trust prompt the first time. Sous chef itself runs in bypass mode (decision 0015) and does not need it.
 
 Sessions do not need `sc` on `PATH`: their brief gives its full path.
+
+### The build, and updating after a pull
+
+`bin/sc` and `bin/souschef` are small launchers. They run the compiled code in `dist/`, which `npm run build` makes from `src/` (`dist/` is not tracked). Before running anything they check the build, and refuse with the command that fixes it, exit code 1:
+
+- no `dist/`, or no `dist/.build-stamp` (the last step of a build, so a build that did not finish has none): `run: cd <core> && npm ci && npm run build`;
+- a file under `src/`, or `tsconfig.json` or `tsconfig.build.json`, newer than the build and with different content from what the build recorded in the stamp: `run: cd <core> && npm run build`;
+- `node_modules/.package-lock.json` missing, or older than a changed `package-lock.json`: `run: cd <core> && npm ci && npm run build`.
+
+At sous chef's startup hook the same text reaches sous chef as its startup context instead, so it can tell you. While the build is stale no hook runs, including the one that blocks edits under `state/`. Why it works this way: decision 0023 (compiled into `dist/`, refused when stale).
+
+So after every pull of the core, update it with one step:
+
+```sh
+cd ~/.sous-chef && git pull && { git diff --quiet ORIG_HEAD HEAD -- package-lock.json || npm ci; } && npm run build
+```
+
+The watcher notices the new build between cycles and restarts on it (`docs/domains/watcher.md`).
+
+**Known limit: hooks find Node through `PATH`.** Hook commands written into a session's settings name the Node that ran `sc` (`process.execPath`), so they do not depend on `PATH`. But sous chef's own hooks in `.agents/settings.json`, and hook commands saved by sessions started before the core moved to TypeScript, run `bin/sc` directly, and its first line (`#!/usr/bin/env node`) finds `node` on `PATH`. Claude Code's background processes on the development Mac carry a `PATH` with Node 22 (seen 2026-10-01). If they did not, those hooks would fail to start, and Claude Code would show a hook error. Lifting it would mean launchers that fall back to a Node path recorded at install.
 
 ### Moving the data folder
 
@@ -55,7 +75,7 @@ Run `souschef` from any terminal. It uses the session registered in `my/state/ch
 - `souschef --new` stops the current background sous chef (its conversation is kept) and starts a fresh one. If sous chef is already stopped it just starts a fresh one, and if it is open in a terminal it refuses, since it cannot stop that one for you.
 - `souschef --print` does everything except attach, and prints the attach command. Without `--print`, `souschef` replaces itself with `claude attach`, so you land in the session and your shell returns when you leave it.
 
-**Permission mode.** A sous chef that `souschef` starts runs in bypass mode: nothing it does waits for a person. The owner chose this knowing sous chef reads email and Slack from other people and can run commands, push and write to Linear, so a mistake or a hidden instruction it wrongly follows goes ahead unseen; only its instructions stand in the way. See decision 0015 (sous chef itself runs in bypass mode). A resumed sous chef keeps the mode it was started with, so a sous chef started before this change keeps its old mode until `souschef --new`. Sessions sous chef spawns take their kind's mode (see "Permissions" in `docs/domains/sessions.md`). The setting is `PERMISSIONS` in `lib/sc/souschef.py`.
+**Permission mode.** A sous chef that `souschef` starts runs in bypass mode: nothing it does waits for a person. The owner chose this knowing sous chef reads email and Slack from other people and can run commands, push and write to Linear, so a mistake or a hidden instruction it wrongly follows goes ahead unseen; only its instructions stand in the way. See decision 0015 (sous chef itself runs in bypass mode). A resumed sous chef keeps the mode it was started with, so a sous chef started before this change keeps its old mode until `souschef --new`. Sessions sous chef spawns take their kind's mode (see "Permissions" in `docs/domains/sessions.md`). The setting is `PERMISSIONS` in `src/souschef.ts`.
 
 Running `claude` in `~/.sous-chef` also works and registers that session as sous chef, but it only lives as long as that terminal. Running only one sous chef at a time is expected; the startup summary warns if a different sous chef session was registered before.
 
@@ -124,7 +144,7 @@ Sous chef needs none of these to run; they exist for the watcher's timing and fo
 | `SC_WATCH_POLL`, `SC_SILENT_GRACE`, `SC_INBOX_GRACE`, `SC_INBOX_RINGS`, `SC_WAKE_RETRY`, `SC_GONE_GRACE`, `SC_STALE_BUSY` | The watcher's timing (`docs/domains/watcher.md`) |
 | `SC_IDENTITY_WAIT` | How long `sc report` waits for a just-launched session's record (default 25 seconds) |
 | `SC_TEST_HOME`, `SC_FAKE_NOW`, `SC_CHEF_RUNTIME`, `SC_WATCH_DISABLE_ENSURE`, `SC_FAKE_LAUNCH_FAILS`, `SC_FAKE_RESUME_FAILS` | Tests only: the data folder, the clock, the runtime recorded for sous chef and the one `souschef` starts and resumes it on, suppressing the real watcher, and making a fake launch or resume fail |
-| `SC_TEST_CODE_FILE` | Tests only: one more file the watcher counts as its code (`watch.code_fingerprint`), so a test can make the watcher restart by changing that file |
+| `SC_TEST_CODE_FILE` | Tests only: one more file the watcher counts as its code (`codeFingerprint` in `src/watch.ts`), so a test can make the watcher restart by changing that file |
 | `SC_UNDER_TEST` | The test suite only, never `sc`: the code root whose `sc` the suite tests (see "Tests" below) |
 
 Sessions are never launched with any of these; see "Which session is calling" in `docs/domains/sessions.md`.
@@ -133,10 +153,12 @@ Sessions are never launched with any of these; see "Which session is calling" in
 
 ```sh
 cd ~/.sous-chef
+npm ci && npm run build
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests
+npx vitest run
 ```
 
-The suite runs the real `sc` command against a temporary home using the `fake` runtime, so it starts no Claude sessions. `WatcherCodeTests` and `CronWakeNoteTests` start real watcher processes from a temporary copy of the code and stop them afterwards; the live watcher is never touched. Claude Code behaviour is checked by hand; `docs/domains/sessions.md` lists what was verified.
+`npm test` does the same in one command (build, vitest, then the Python suite). The suite runs the real `sc` command against a temporary home using the `fake` runtime, so it starts no Claude sessions. `WatcherCodeTests` and `CronWakeNoteTests` start real watcher processes from a temporary copy of the code and stop them afterwards; the live watcher is never touched. Claude Code behaviour is checked by hand; `docs/domains/sessions.md` lists what was verified.
 
 To run the suite against another code root (a folder with an executable `bin/sc` and `bin/souschef`, such as another checkout or a staged copy), name it with an absolute path:
 
@@ -145,6 +167,8 @@ SC_UNDER_TEST=<code root> PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover
 ```
 
 The tests come from this checkout and the `sc` from the code root. Tests marked Python-only (the Python sc's internals) are skipped when that `sc` is not the Python one; `AGENTS.md` ("Testing") says how this is decided.
+
+`npx vitest run` runs the TypeScript unit tests in `tests/*.test.ts`; the launcher tests need a build. The Python behaviour tests above stay the gate for behaviour until they are ported (TRV-1157).
 
 The captured-output tests (`tests/test_captured.py`) compare output word for word with the files in `tests/captured/`, with paths, session ids and the fake relay's port replaced by placeholders. After a deliberate change to that output, run the suite with `SC_UPDATE_CAPTURED=1` to rewrite the files, and check their diff: it is the list of what changed for the owner.
 

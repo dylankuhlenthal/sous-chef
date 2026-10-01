@@ -100,7 +100,7 @@ function errorText(e: unknown): string {
  * A hash of the code a watcher runs: bin/sc and every file under dist/ (the build).
  *
  * Kinds and templates are left out: they are read fresh each time they are used.
- * dist/.build-stamp is empty, so an identical rebuild gives the same hash.
+ * dist/.build-stamp records only content (scripts/build-stamp.js), so an identical rebuild gives the same hash.
  * Tests only: SC_TEST_CODE_FILE names one more file to count as code, so a test can
  * change the code without editing a language's own source files.
  */
