@@ -39,6 +39,12 @@ ALLOWED = {
     ("tests/stored_values.py", 'LEGACY_OWNER = "dylan"'),
     ("tests/stored_values.py", 'LEGACY_FROM_OWNER = "from_dylan"'),
 }
+# The pinned Porch dependency (docs/decisions/0025): its package name and GitHub source
+# carry its author's account, which is not the core naming its owner. Allowed only in
+# these two files, and only as these exact forms, so any other mention still fails.
+PORCH_FILES = ("package.json", "package-lock.json")
+PORCH_NAMES = re.compile(r"@dylankuhlenthal/porch\b|github:dylankuhlenthal/porch#[\w.-]+"
+                         r"|github\.com/dylankuhlenthal/porch\.git#[0-9a-f]{40}")
 
 
 def core_files() -> list:
@@ -62,7 +68,8 @@ class OwnerNeutralTests(unittest.TestCase):
             except UnicodeDecodeError:
                 continue
             for n, line in enumerate(text.splitlines(), 1):
-                if SEARCH.search(line) and (rel, line.strip()) not in ALLOWED:
+                checked = PORCH_NAMES.sub("", line) if rel in PORCH_FILES else line
+                if SEARCH.search(checked) and (rel, line.strip()) not in ALLOWED:
                     found.append(f"{rel}:{n}: {line.strip()[:120]}")
                 if any(hashlib.sha256(m.group().encode()).hexdigest() == SLACK_ID_SHA256
                        for m in SLACK_ID.finditer(line)):
