@@ -2,7 +2,7 @@
 
 Sous chef runs as a Claude Code background session so it keeps running when no
 terminal is attached. `souschef` works out what to do from the session
-registered in state/chef.json and the live `claude agents` listing:
+registered in state/chef.json and the runtime's live listing (`claude agents`):
 
   registered session running in the background  -> attach to it
   registered session running in a terminal       -> say where; attaching is not possible
@@ -16,13 +16,16 @@ so switching an older sous chef over takes `souschef --new`.
 `souschef --new` stops the registered background session (its conversation is
 kept) and starts a fresh one. `souschef --print` does everything except attach
 and prints the attach command instead.
+
+The runtime is Claude Code (`claude-bg`). Tests name another with SC_CHEF_RUNTIME
+(the fake runtime), which then provides the same functions: listing, start_named,
+resume_session_id, stop_short, attach_command and attach_exec.
 """
 import argparse
 import os
 import sys
 
-from . import chef, util
-from .runtimes import claude_bg
+from . import chef, runtimes, util
 
 SESSION_NAME = "sous-chef"
 # sc's permission value for sous chef's own session (runtimes.PERMISSIONS).
@@ -48,17 +51,22 @@ def decide(info, rows) -> tuple:
     return "resume", info["session_id"]
 
 
+def _runtime():
+    """The runtime sous chef's own session runs on: SC_CHEF_RUNTIME (tests), else Claude Code."""
+    return runtimes.get(os.environ.get("SC_CHEF_RUNTIME") or runtimes.DEFAULT)
+
+
 def _env() -> dict:
     return {k: v for k, v in os.environ.items() if k != "SC_TEST_HOME"}
 
 
 def _start() -> str:
-    return claude_bg.start_named(SESSION_NAME, first_prompt(), str(util.CODE_ROOT), _env(), PERMISSIONS)
+    return _runtime().start_named(SESSION_NAME, first_prompt(), str(util.CODE_ROOT), _env(), PERMISSIONS)
 
 
 def _resume(session_id: str):
     """Resume the registered session. Returns its short id, or None if it did not come back."""
-    return claude_bg.resume_session_id(session_id, str(util.CODE_ROOT), _env())
+    return _runtime().resume_session_id(session_id, str(util.CODE_ROOT), _env())
 
 
 def main(argv=None) -> int:
@@ -68,13 +76,14 @@ def main(argv=None) -> int:
                    help="start or resume if needed, then print the attach command instead of attaching")
     args = p.parse_args(argv)
     try:
+        rt = _runtime()
         info = chef.current()
-        rows = claude_bg.listing()
+        rows = rt.listing()
         action, detail = decide(info, rows)
 
         if args.new and action in ("attach", "resume"):
             if action == "attach":
-                claude_bg.stop_short(detail)
+                rt.stop_short(detail)
                 print(f"stopped the previous sous chef ({detail}); its conversation is kept")
             action = "start"
         elif args.new and action == "elsewhere":
@@ -99,9 +108,9 @@ def main(argv=None) -> int:
             print(f"started sous chef ({detail}) with permissions: {PERMISSIONS}")
 
         if args.print_only:
-            print(claude_bg.attach_command({"handle": {"short_id": detail}}))
+            print(rt.attach_command({"handle": {"short_id": detail}}))
             return 0
-        claude_bg.attach_exec(detail, str(util.CODE_ROOT), _env())
+        rt.attach_exec(detail, str(util.CODE_ROOT), _env())
     except util.SCError as e:
         print(f"souschef: {e}", file=sys.stderr)
         return 1

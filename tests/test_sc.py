@@ -12,10 +12,8 @@ import unittest
 from pathlib import Path
 
 import core_paths
-from lib_setup import LEGACY_OWNER
-
-ROOT = Path(__file__).resolve().parents[1]
-SC = ROOT / "bin" / "sc"
+from sc_under_test import CODE, REPO, SC, SOUSCHEF, python_only
+from stored_values import LEGACY_OWNER
 
 
 class ScTestCase(unittest.TestCase):
@@ -109,7 +107,7 @@ class SpawnTests(ScTestCase):
         sid = self.spawn()
         launched = self.fake_state()["sessions"][sid]
         self.assertNotIn("SC_SESSION_ID", launched["env"])
-        self.assertIn(str(ROOT / "bin"), launched["env"]["PATH"].split(":"))
+        self.assertIn(str(CODE / "bin"), launched["env"]["PATH"].split(":"))
         self.assertEqual(sorted(launched["settings"]["hooks"]),
                          ["PreToolUse", "SessionStart", "Stop", "UserPromptSubmit"])
 
@@ -117,7 +115,7 @@ class SpawnTests(ScTestCase):
         out = self.sc("spawn", "--kind", "general", "--title", "x", "--cwd", str(self.home),
                       "--runtime", "fake", stdin="task", ok=False)
         self.assertIn("inside the sous chef data folder", out.stderr)
-        out = self.sc("spawn", "--kind", "general", "--title", "x", "--cwd", str(ROOT / "docs"),
+        out = self.sc("spawn", "--kind", "general", "--title", "x", "--cwd", str(CODE / "kinds"),
                       "--runtime", "fake", stdin="task", ok=False)
         self.assertIn("inside the sous chef code folder", out.stderr)
         out = self.sc("spawn", "--kind", "general", "--title", "x", "--cwd", str(self.work),
@@ -164,7 +162,7 @@ class CodeCopyTestCase(ScTestCase):
 
     def setUp(self):
         super().setUp()
-        self.code = core_paths.copy_code(Path(self.tmp.name) / "code")
+        self.code = core_paths.copy_code(Path(self.tmp.name) / "code", root=CODE)
 
     def copy_sc(self, *args, stdin=None, ok=True, env=None):
         env = {**self.base_env, "SC_FAKE_NOW": str(self.clock), **(env or {})}
@@ -226,7 +224,7 @@ class KindPermissionsTests(CodeCopyTestCase):
     def test_the_core_ships_only_general_and_investigate_neither_in_bypass(self):
         """Run against the core as published: the owner's kinds are theirs, in my/kinds (decision 0020)."""
         self.assertEqual(core_paths.core_kind_names(), ["general", "investigate"])
-        code = core_paths.copy_code(Path(self.tmp.name) / "core")
+        code = core_paths.copy_code(Path(self.tmp.name) / "core", root=CODE)
         out = subprocess.run([str(code / "bin" / "sc"), "kinds", "--runtime", "fake"], capture_output=True,
                              text=True, env={**self.base_env, "SC_FAKE_NOW": str(self.clock)}).stdout.splitlines()
         self.assertEqual([l.split()[0] for l in out if l and l[0] != " "], ["general", "investigate"])
@@ -536,14 +534,31 @@ class SetupTests(CodeCopyTestCase):
         self.assertFalse(self.data.exists())
 
     def test_install_names_the_tools_it_cannot_find(self):
-        tools = Path(self.tmp.name) / "tools"
-        tools.mkdir()
-        for name in ("python3", "dirname", "git"):
-            (tools / name).symlink_to(subprocess.run(["which", name], capture_output=True, text=True).stdout.strip())
-        out = self.install("--name", "Sam", ok=False, env={"PATH": str(tools)})
+        # The real PATH, with every folder holding a claude swapped for links to everything else in it.
+        path = []
+        for n, folder in enumerate(os.environ["PATH"].split(os.pathsep)):
+            if folder and (Path(folder) / "claude").exists():
+                tools = Path(self.tmp.name) / f"tools-{n}"
+                tools.mkdir()
+                for item in Path(folder).iterdir():
+                    if item.name != "claude":
+                        (tools / item.name).symlink_to(item)
+                folder = str(tools)
+            path.append(folder)
+        out = self.install("--name", "Sam", ok=False, env={"PATH": os.pathsep.join(path)})
         self.assertEqual(out.returncode, 1)
         self.assertIn("not found on your PATH: claude", out.stderr)
         self.assertFalse((self.code / "my").is_symlink())
+
+    def test_the_owner_file_is_kept_by_the_data_folder_and_ignored_by_the_core(self):
+        self.assertIn("/owner.json", (REPO / ".gitignore").read_text().split())
+        self.install("--name", "Sam")
+        self.assertNotIn("owner.json", (self.data / ".gitignore").read_text())
+
+    def test_env_is_gitignored_in_the_core_and_in_a_new_data_folder(self):
+        self.assertIn("/.env", (REPO / ".gitignore").read_text().split())
+        self.install("--name", "Sam")
+        self.assertIn(".env", (self.data / ".gitignore").read_text().split())
 
 
 class OwnerInstructionsTests(ScTestCase):
@@ -1444,27 +1459,37 @@ class PromptWatcherTests(ScTestCase):
         self.assertIn("waiting on: alex", self.sc("status", sid).stdout)
 
 
-class WatcherCodeTests(ScTestCase):
-    """A running watcher and the code under it. These start real watcher processes (no Claude
-    sessions) from a copy of the code, so a test can change that code without touching this checkout."""
+class RunningWatcherTestCase(ScTestCase):
+    """Starts real watcher processes (no Claude sessions) from a copy of the code under test, and
+    stops them afterwards. A test never takes the watcher's lock itself: how the lock is held
+    differs by language (TRV-1143 decision 13), so a test that needs a running watcher starts one."""
 
     def setUp(self):
         super().setUp()
-        self.code = core_paths.copy_code(Path(self.tmp.name) / "code")
+        self.code = core_paths.copy_code(Path(self.tmp.name) / "code", root=CODE)
         self.state = self.home / "state"
+        # A file the watcher counts as code (SC_TEST_CODE_FILE), so a test can change "the code"
+        # the same way whatever language the sc under test is written in.
+        self.marker = self.code / "code-marker"
+        self.marker.write_text("")
 
     def tearDown(self):
         self.stop_watchers()  # before the temporary home (and its watch.pid) is deleted
         super().tearDown()
 
-    def copy_sc(self, *args, poll="0.2", stdin=None):
-        env = {**self.base_env, "SC_WATCH_POLL": poll}
+    def copy_sc(self, *args, poll="0.2", stdin=None, env=None):
+        # Every call passes the marker: sc compares the watcher's code with its own, marker included.
+        env = {**self.base_env, "SC_WATCH_POLL": poll, "SC_TEST_CODE_FILE": str(self.marker), **(env or {})}
         return subprocess.run([str(self.code / "bin" / "sc"), *args], capture_output=True, text=True, env=env,
                               timeout=60, input=stdin)
 
     def stop_watchers(self):
-        # Every watcher any test started runs from this test's copy of the code.
-        subprocess.run(["pkill", "-KILL", "-f", f"{self.code}/bin/sc watch"], capture_output=True)
+        # Every watcher any test started runs from this test's copy of the code, whose temporary
+        # path is unique and appears in the command line however the watcher was started.
+        subprocess.run(["pkill", "-KILL", "-f", str(self.code)], capture_output=True)
+
+    def alive(self, pid):
+        return subprocess.run(["kill", "-0", str(pid)], capture_output=True).returncode == 0
 
     def wait_for(self, condition, seconds=10):
         import time
@@ -1482,24 +1507,37 @@ class WatcherCodeTests(ScTestCase):
     def pid(self):
         return int((self.state / "watch.pid").read_text())
 
-    def change_code(self, text="# a change\n"):
-        with open(self.code / "lib" / "sc" / "util.py", "a") as f:
-            f.write(text)
+
+class WatcherCodeTests(RunningWatcherTestCase):
+    """A running watcher and the code under it: the copy lets a test change that code without
+    touching the code under test."""
+
+    def change_code(self):
+        with open(self.marker, "a") as f:
+            f.write("a change\n")
 
     def test_a_watcher_restarts_itself_on_new_code_between_cycles(self):
         self.assertIn("watcher running", self.copy_sc("watch", "--ensure").stdout)
-        before, pid = self.code_record()["code"], self.pid()
+        before, old = self.code_record()["code"], self.pid()
         self.change_code()
         self.assertTrue(self.wait_for(lambda: self.code_record().get("code") not in (None, before)),
                         (self.state / "watch.log").read_text())
-        self.assertEqual(self.pid(), pid)  # replaced itself in place, so no second watcher
+        # One watcher runs: the one that recorded the new code. It may have replaced itself in
+        # place (same pid) or started a new process and exited (TRV-1143 decision 12).
+        pid = self.pid()
+        self.assertEqual(self.code_record()["pid"], pid)
+        self.assertTrue(self.alive(pid))
+        self.assertTrue(self.wait_for(lambda: old == pid or not self.alive(old)))
         self.assertIn("restarting on the new code", (self.state / "watch.log").read_text())
         self.assertIn("## Watcher\nrunning\n", self.copy_sc("summary").stdout)
 
     def test_new_code_that_does_not_load_is_refused_and_the_old_code_keeps_running(self):
         self.copy_sc("watch", "--ensure")
         before = self.code_record()["code"]
-        self.change_code("def broken(:\n")
+        self.change_code()
+        sc = self.code / "bin" / "sc"
+        sc.write_text("def broken(:\n")  # fails in Python, Node and sh alike
+        sc.chmod(0o755)
         self.assertTrue(self.wait_for(lambda: "does not load" in (self.state / "watch.log").read_text()))
         beat = (self.state / "watch.beat").read_text()
         self.assertTrue(self.wait_for(lambda: (self.state / "watch.beat").read_text() != beat))
@@ -1514,8 +1552,7 @@ class WatcherCodeTests(ScTestCase):
         out = self.copy_sc("watch", "--ensure")
         self.assertIn("was running older code, so it was restarted", out.stdout)
         self.assertNotEqual(self.pid(), old)
-        self.assertTrue(self.wait_for(lambda: subprocess.run(["kill", "-0", str(old)],
-                                                             capture_output=True).returncode != 0))
+        self.assertTrue(self.wait_for(lambda: not self.alive(old)))
         self.assertIn("watcher stopped between cycles", (self.state / "watch.log").read_text())
         self.assertEqual(self.code_record()["pid"], self.pid())
 
@@ -1633,7 +1670,7 @@ class HookTests(ScTestCase):
 
     def _code_repo(self, name):
         """A copy of the core's code, committed in a git repo of its own."""
-        repo = core_paths.copy_code(Path(self.tmp.name) / name)
+        repo = core_paths.copy_code(Path(self.tmp.name) / name, root=CODE)
         for args in (("init", "-q"), ("config", "user.email", "t@t"), ("config", "user.name", "t"),
                      ("add", "-A"), ("commit", "-qm", "init")):
             subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, check=True)
@@ -1760,31 +1797,84 @@ class WorktreeTests(ScTestCase):
         self.assertEqual(self.fake_state()["sessions"][again]["settings"].get("worktree"), {"bgIsolation": "none"})
 
 
-class SouschefDecisionTests(unittest.TestCase):
+class SouschefTests(ScTestCase):
+    """`souschef --print` against the fake runtime (SC_CHEF_RUNTIME=fake): what it decides from the
+    registered sous chef and the runtime's listing. Never run without --print, which would attach."""
+
+    def souschef(self, *args, env=None, ok=True):
+        e = {**self.base_env, "SC_FAKE_NOW": str(self.clock), **(env or {})}
+        out = subprocess.run([str(SOUSCHEF), "--print", *args], capture_output=True, text=True, env=e)
+        if ok and out.returncode != 0:
+            self.fail(f"souschef {' '.join(args)} failed ({out.returncode}): {out.stdout}{out.stderr}")
+        return out
+
+    def fake_rows(self, **rows):
+        """Replace the fake runtime's sessions with these rows."""
+        path = self.home / "state" / "fake-runtime.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"sessions": rows, "wakes": []}))
+
+    def started(self):
+        """The rows of sous chef sessions souschef started (the fake runtime keys them fake-chef-<n>)."""
+        return {k: v for k, v in self.fake_state()["sessions"].items() if k.startswith("fake-chef-")}
+
+    def test_with_nothing_registered_a_new_sous_chef_is_started_in_bypass_mode(self):
+        out = self.souschef().stdout
+        self.assertEqual(out, "started sous chef (chef-1) with permissions: bypass\nfake attach chef-1\n")
+        row = self.started()["fake-chef-1"]
+        self.assertEqual((row["name"], row["permissions"], row["cwd"]), ("sous-chef", "bypass", str(CODE)))
+
+    def test_a_running_background_sous_chef_is_attached_not_started(self):
+        self.register_chef()
+        self.fake_rows(**{"chef-1": {"alive": True, "pid": 1, "kind": "background", "id": "abcd1234"}})
+        self.assertEqual(self.souschef().stdout, "fake attach abcd1234\n")
+        self.assertEqual(self.started(), {})
+
+    def test_a_sous_chef_open_in_a_terminal_is_reported_and_left_alone(self):
+        self.register_chef()
+        self.fake_rows(**{"chef-1": {"alive": True, "pid": 1, "kind": "interactive", "id": "abcd1234"}})
+        out = self.souschef(ok=False)
+        self.assertEqual(out.returncode, 1)
+        self.assertIn("already open in another terminal", out.stdout)
+        self.assertNotIn("fake attach", out.stdout)
+        self.assertEqual(self.started(), {})
+
+    def test_a_stopped_or_unlisted_sous_chef_is_resumed(self):
+        self.register_chef()
+        for rows in ({"chef-1": {"alive": False, "kind": "background", "id": "abcd1234"}}, {}):
+            self.fake_rows(**rows)
+            out = self.souschef().stdout
+            short = "abcd1234" if rows else "chef-1"
+            self.assertEqual(out, f"resumed sous chef ({short})\nfake attach {short}\n")
+            self.assertEqual(self.fake_state()["sessions"]["chef-1"]["pid"], 1)
+            self.assertEqual(self.started(), {})
+
+    def test_a_sous_chef_that_does_not_come_back_is_replaced_by_a_new_one(self):
+        self.register_chef()
+        self.fake_rows(**{"chef-1": {"alive": False, "kind": "background", "id": "abcd1234"}})
+        out = self.souschef(env={"SC_FAKE_RESUME_FAILS": "1"}).stdout
+        self.assertEqual(out, "could not resume the previous sous chef session; starting a new one\n"
+                              "started sous chef (chef-1) with permissions: bypass\nfake attach chef-1\n")
+        self.assertEqual(list(self.started()), ["fake-chef-1"])
+
+    def test_new_stops_the_background_sous_chef_and_starts_a_fresh_one(self):
+        self.register_chef()
+        self.fake_rows(**{"chef-1": {"alive": True, "pid": 1, "kind": "background", "id": "abcd1234"}})
+        out = self.souschef("--new").stdout
+        self.assertEqual(out, "stopped the previous sous chef (abcd1234); its conversation is kept\n"
+                              "started sous chef (chef-1) with permissions: bypass\nfake attach chef-1\n")
+        old = self.fake_state()["sessions"]["chef-1"]
+        self.assertFalse(old["alive"])
+        self.assertNotIn("pid", old)
+        self.assertEqual(self.started()["fake-chef-1"]["permissions"], "bypass")
+
+
+@python_only
+class SouschefClaudeArgsTests(unittest.TestCase):
+    """How `souschef` starts sous chef on the Claude runtime, from claude_bg's own arguments."""
+
     def setUp(self):
-        import sys
-        sys.path.insert(0, str(ROOT / "lib"))
-        from sc import souschef
-        self.decide = souschef.decide
-
-    def test_nothing_registered_starts(self):
-        self.assertEqual(self.decide(None, {}), ("start", None))
-
-    def test_running_background_session_is_attached(self):
-        info = {"session_id": "abcd1234-full"}
-        rows = {"abcd1234-full": {"id": "abcd1234", "pid": 9, "kind": "background"}}
-        self.assertEqual(self.decide(info, rows), ("attach", "abcd1234"))
-
-    def test_running_terminal_session_is_reported_not_attached(self):
-        info = {"session_id": "abcd1234-full"}
-        row = {"id": "abcd1234", "pid": 9, "kind": "interactive"}
-        self.assertEqual(self.decide(info, {"abcd1234-full": row}), ("elsewhere", row))
-
-    def test_stopped_or_unlisted_session_is_resumed(self):
-        info = {"session_id": "abcd1234-full"}
-        self.assertEqual(self.decide(info, {"abcd1234-full": {"id": "abcd1234", "kind": "background"}}),
-                         ("resume", "abcd1234-full"))
-        self.assertEqual(self.decide(info, {}), ("resume", "abcd1234-full"))
+        sys.path.insert(0, str(CODE / "lib"))
 
     def test_a_new_sous_chef_is_started_in_bypass_mode(self):
         from sc import souschef
@@ -2022,11 +2112,6 @@ class OwnerTests(ScTestCase):
             self.assertIn("No usable owner", self.sc("summary").stdout.splitlines()[0])
             self.assertIn("starts waiting on agent", self.sc("kinds", "--runtime", "fake").stdout)
 
-    def test_the_owner_file_is_kept_by_the_data_folder_and_ignored_by_the_core(self):
-        self.assertIn("/owner.json", (ROOT / ".gitignore").read_text().split())
-        from lib_setup import DATA_GITIGNORE
-        self.assertNotIn("owner.json", DATA_GITIGNORE)
-
 
 class OwnerNameTests(ScTestCase):
     """What sessions, kinds, events and the watcher say and store now that the owner is a setting."""
@@ -2049,7 +2134,7 @@ class OwnerNameTests(ScTestCase):
         for kind in core_paths.core_kind_names() + ["pairing-page"]:
             brief = self.brief(self.spawn(kind=kind, title=f"{kind} task"))
             self.assertIn("**sous chef**, Sam's agent that keeps track of Sam's work", brief)
-            self.assertNotIn("alex", brief.replace(str(ROOT), "<CODE>").lower())  # the checkout's own path aside
+            self.assertNotIn("alex", brief.replace(str(CODE), "<CODE>").lower())  # the checkout's own path aside
             self.assertNotIn("{{", brief)
         self.assertIn("Open the page for\nSam.", self.brief(self.spawn(kind="pairing-page", title="again")))
 
@@ -2134,10 +2219,9 @@ class OwnerNameTests(ScTestCase):
 
     def test_the_first_prompt_waits_for_the_owner(self):
         self.become("Sam", "sam/")
-        code = "import sys; sys.path.insert(0, sys.argv[1]); from sc import souschef; print(souschef.first_prompt())"
-        out = subprocess.run([sys.executable, "-c", code, str(ROOT / "lib")], capture_output=True, text=True,
-                             env=self.base_env, check=True).stdout
-        self.assertTrue(out.strip().endswith("Then wait for Sam."))
+        subprocess.run([str(SOUSCHEF), "--print"], capture_output=True, text=True, env=self.base_env, check=True)
+        prompt = self.fake_state()["sessions"]["fake-chef-1"]["launch_prompt"]
+        self.assertTrue(prompt.endswith("Then wait for Sam."), prompt)
 
 
 class OwnerKindTests(ScTestCase):
@@ -2145,7 +2229,7 @@ class OwnerKindTests(ScTestCase):
 
     def setUp(self):
         super().setUp()
-        self.code = core_paths.copy_code(Path(self.tmp.name) / "code")
+        self.code = core_paths.copy_code(Path(self.tmp.name) / "code", root=CODE)
 
     def copy_sc(self, *args, ok=True):
         out = subprocess.run([str(self.code / "bin" / "sc"), *args], input="do it", capture_output=True, text=True,
@@ -2395,19 +2479,6 @@ class CronTests(ScTestCase):
         self.clock += self.HOUR
         self.assertIn("wrote due as cron event #3 for sous chef", self.watch())
 
-    def test_run_says_when_sous_chef_is_idle_busy_or_not_running(self):
-        from unittest import mock
-        import sys
-        sys.path.insert(0, str(ROOT / "lib"))
-        from sc import cron as cronmod
-        with mock.patch("sc.watch.is_running", return_value=True):
-            with mock.patch("sc.chef.status", return_value={"alive": True, "busy": False}):
-                self.assertIn("it is idle, so the watcher wakes it within one cycle", cronmod._chef_wake_note())
-            with mock.patch("sc.chef.status", return_value={"alive": True, "busy": True}):
-                self.assertIn("it is mid-turn", cronmod._chef_wake_note())
-            with mock.patch("sc.chef.status", return_value={"alive": False, "busy": None}):
-                self.assertIn("sous chef is not running", cronmod._chef_wake_note())
-
     def test_run_on_a_worker_job_says_what_it_launched(self):
         self.add_worker("inbox-scan", "--every", "12h")
         out = self.sc("cron", "run", "inbox-scan").stdout
@@ -2557,12 +2628,40 @@ class CronTests(ScTestCase):
         self.assertEqual(len(self.chef_wakes()), 1)
 
 
+class CronWakeNoteTests(RunningWatcherTestCase):
+    """What `sc cron run` says about waking sous chef, with a real watcher running. Whether the
+    watcher runs is told by its lock, so the test starts one rather than taking the lock itself."""
+
+    def set_chef(self, **fields):
+        path = self.state / "fake-runtime.json"
+        data = json.loads(path.read_text()) if path.exists() else {"sessions": {}, "wakes": []}
+        data["sessions"]["chef-1"] = {"alive": True, "busy": False, **fields}
+        path.write_text(json.dumps(data))
+
+    def test_run_says_when_sous_chef_is_idle_busy_or_not_running(self):
+        self.copy_sc("cron", "add", "tidy", "--every", "30m", "--target", "chef", stdin="tidy up").check_returncode()
+        self.copy_sc("hook", "chef-start", stdin=json.dumps({"session_id": "chef-1", "source": "startup"}),
+                     env={"SC_WATCH_DISABLE_ENSURE": "1"}).check_returncode()
+        self.set_chef()
+        self.assertIn("watcher running", self.copy_sc("watch", "--ensure", poll="3600").stdout)
+        # Its first cycle is over, so it will not write fake-runtime.json while the test does.
+        self.assertTrue(self.wait_for(lambda: (self.state / "watch.beat").exists()))
+        for fields, note in (({}, "it is idle, so the watcher wakes it within one cycle"),
+                             ({"busy": True}, "it is mid-turn"),
+                             ({"alive": False}, "sous chef is not running")):
+            self.set_chef(**fields)
+            out = self.copy_sc("cron", "run", "tidy", poll="3600")
+            self.assertEqual(out.returncode, 0, out.stderr)
+            self.assertIn(note, out.stdout)
+
+
+@python_only
 class WakeTests(unittest.TestCase):
     """The wake path, against a real Unix socket rather than a mock."""
 
     def setUp(self):
         import sys
-        sys.path.insert(0, str(ROOT / "lib"))
+        sys.path.insert(0, str(CODE / "lib"))
         from sc import wake
         self.wake = wake
 
@@ -2711,6 +2810,7 @@ class ActivityListingTests(ScTestCase):
         self.assertNotIn("doing:", self.sc("status", sid).stdout)
 
 
+@python_only
 class ClaudeRuntimeParsingTests(unittest.TestCase):
     """The real `claude --bg` output, captured when sous chef launched a session from its own Bash tool."""
 
@@ -2719,7 +2819,7 @@ class ClaudeRuntimeParsingTests(unittest.TestCase):
 
     def setUp(self):
         import sys
-        sys.path.insert(0, str(ROOT / "lib"))
+        sys.path.insert(0, str(CODE / "lib"))
         from sc.runtimes import claude_bg
         self.claude_bg = claude_bg
 

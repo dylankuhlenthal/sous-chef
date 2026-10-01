@@ -61,6 +61,7 @@ import subprocess
 import sys
 import time
 import traceback
+from pathlib import Path
 
 from . import chef, cron, events, inbox, ops, records, runtimes, slack, sync, util, wake
 
@@ -86,11 +87,17 @@ def code_fingerprint() -> str:
     """A hash of the code a watcher runs: bin/sc and every module under lib/sc/.
 
     Kinds and templates are left out: they are read fresh each time they are used.
+    Tests only: SC_TEST_CODE_FILE names one more file to count as code, so a test can
+    change the code without editing a language's own source files.
     """
     root = util.CODE_ROOT
     h = hashlib.sha1()
-    for path in [root / "bin" / "sc", *sorted((root / "lib" / "sc").rglob("*.py"))]:
-        h.update(str(path.relative_to(root)).encode() + b"\0")
+    paths = [(path, str(path.relative_to(root))) for path in
+             [root / "bin" / "sc", *sorted((root / "lib" / "sc").rglob("*.py"))]]
+    if os.environ.get("SC_TEST_CODE_FILE"):
+        paths.append((Path(os.environ["SC_TEST_CODE_FILE"]), os.environ["SC_TEST_CODE_FILE"]))
+    for path, name in paths:
+        h.update(name.encode() + b"\0")
         try:
             h.update(path.read_bytes())
         except OSError:

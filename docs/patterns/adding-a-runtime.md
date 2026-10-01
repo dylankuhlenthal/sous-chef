@@ -21,7 +21,7 @@ A runtime module defines these, as documented in `lib/sc/runtimes/__init__.py`:
 | `skill_available(name, cwd)` | Say whether a session of this runtime in `cwd` can run the skill `name`: `True`, `False`, or `None` when the runtime cannot tell. `cwd` is `None` for `sc kinds`, which has no working directory: check only what every session gets. Only `False` makes `sc spawn` refuse, so answer `False` only when the skill is definitely not there; a runtime whose tool has no skills, or that cannot look, returns `None` |
 | `skill_places(cwd)` | Return where `skill_available` looks, as a list of strings, for the refusal message |
 
-If sous chef itself can run on the runtime, it also needs the four functions `souschef` uses: `start_named`, `resume_session_id`, `stop_short` and `attach_exec` (see `lib/sc/runtimes/claude_bg.py`). Nothing outside `lib/sc/runtimes/` runs the agent tool directly.
+If sous chef itself can run on the runtime, it also needs the four functions `souschef` uses besides `listing` and `attach_command`: `start_named(name, prompt, cwd, env, permissions)` (start sous chef's session, return its short id), `resume_session_id(session_id, cwd, env)` (continue it, return its short id or `None` if it did not come back), `stop_short(short_id)` and `attach_exec(short_id, cwd, env)` (see `lib/sc/runtimes/claude_bg.py`). Its `listing` rows must carry `pid` while running and `kind` (`background` or not), which `souschef` decides from. `souschef` runs on `claude-bg` unless `SC_CHEF_RUNTIME` names another runtime, which only tests do; the fake runtime (`lib/sc/runtimes/fake.py`) implements the four for them. Nothing outside `lib/sc/runtimes/` runs the agent tool directly.
 
 ## What a new runtime has to provide for the rest to work
 

@@ -3,15 +3,21 @@
 Everything else in a sous chef folder is the owner's (their data folder, reached
 through the `my` link). The list is used by:
 
-  copy_code()       tests that run a copy of the code, holding only core files, so
-                    they pass in the core as it is published (decision 0020)
+  copy_code()       tests that run a copy of the code under test, holding only core
+                    files, so they pass in the core as it is published (decision 0020),
+                    plus a built core's output
   core_files()      the checks that no personal file and no owner's name is in the core
+
+The path list is about this checkout's content (ROOT), whichever sc the suite tests;
+copy_code copies the code under test (sc_under_test.CODE) unless told otherwise.
 
 Run: python3 -m unittest discover -s tests
 """
 import shutil
 import subprocess
 from pathlib import Path
+
+from sc_under_test import CODE
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -26,8 +32,14 @@ CORE_PATHS = (
 # Inside a core folder but never core: written per install, gitignored.
 NOT_CORE = (".agents/settings.local.json",)
 
-# What a running copy of the code needs.
+# What a running copy of the code needs: copied file by file, core files only.
 RUNTIME_PATHS = ("bin/", "lib/", "templates/", "kinds/", "install.sh")
+# A built core's source and output: copied whole when present, not filtered by the path
+# list (dist/ is gitignored, so it is never on it), with modification times kept so a
+# launcher that compares dist/ with src/ sees the copy as built.
+BUILD_PATHS = ("src/", "dist/", "package.json", "package-lock.json")
+# Linked, not copied, when present: too big to copy for every test, and never changed by one.
+LINKED_PATHS = ("node_modules",)
 
 
 def is_core(rel: str) -> bool:
@@ -49,16 +61,19 @@ def core_files(root: Path = ROOT) -> list:
     return [f for f in listed_files(root) if is_core(f)]
 
 
-def copy_code(dest: Path, root: Path = ROOT) -> Path:
-    """Copy the core's runtime files (bin, lib, templates, the core kinds, install.sh) into dest.
+def copy_code(dest: Path, root: Path = CODE) -> Path:
+    """Copy what a running sc needs from the code root `root` into dest, and return dest.
 
-    Walks the folder rather than asking git, so it also works in a copy that is not
-    a git repo. The owner's kinds, if still in the tree, are left behind.
+    RUNTIME_PATHS file by file, core files only (so the owner's kinds, if still in the
+    tree, and Python's caches are left behind); then BUILD_PATHS whole; then LINKED_PATHS
+    as links to root's. Paths root does not have are skipped. Every file keeps its
+    modification time. Walks the folder rather than asking git, so it also works in a
+    copy that is not a git repo.
     """
+    dest.mkdir(parents=True, exist_ok=True)
     for part in RUNTIME_PATHS:
         src = root / part.rstrip("/")
         if src.is_file():
-            dest.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src, dest / src.name)
             continue
         if not src.is_dir():
@@ -69,6 +84,15 @@ def copy_code(dest: Path, root: Path = ROOT) -> Path:
                 target = dest / rel
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(path, target)
+    for part in BUILD_PATHS:
+        src = root / part.rstrip("/")
+        if src.is_dir():
+            shutil.copytree(src, dest / part.rstrip("/"), symlinks=True, dirs_exist_ok=True)
+        elif src.is_file():
+            shutil.copy2(src, dest / part)
+    for part in LINKED_PATHS:
+        if (root / part).exists() and not (dest / part).is_symlink():
+            (dest / part).symlink_to(root / part)
     return dest
 
 

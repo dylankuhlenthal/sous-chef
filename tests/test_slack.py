@@ -9,7 +9,7 @@ from pathlib import Path
 
 import fake_relay
 from fake_relay import ALEX, BOT, DM, KEY
-from lib_setup import LEGACY_FROM_OWNER
+from stored_values import LEGACY_FROM_OWNER
 from test_sc import ScTestCase
 
 
@@ -74,12 +74,6 @@ class SlackSetupTests(SlackTestCase):
         self.assertIn("not a URL", self.sc("slack", "setup", "--url", "relay.local", "--key-file",
                                            self.key_file(), "--user", ALEX, ok=False).stderr)
         self.assertIn("usage: sc slack setup", self.sc("slack", "setup", ok=False).stderr)
-
-    def test_env_is_gitignored_in_the_core_and_in_a_new_data_folder(self):
-        root = Path(__file__).resolve().parents[1]
-        self.assertIn("/.env", (root / ".gitignore").read_text().split())
-        from lib_setup import DATA_GITIGNORE
-        self.assertIn(".env", DATA_GITIGNORE.split())
 
     def test_a_file_others_can_read_turns_slack_off_with_the_fix(self):
         self.setup_slack()

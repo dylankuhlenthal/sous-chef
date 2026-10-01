@@ -29,6 +29,15 @@ adding a module here with the same functions:
   wake_session_id(id, text, rows=None)   wake any session by the tool's own session id
   status_session_id(id, rows=None)       `status` for any session by the tool's own session id
                                          (these two only if sous chef itself runs on this runtime)
+  start_named(name, prompt, cwd, env, permissions)
+                                         start sous chef's own session; return its short id
+  resume_session_id(id, cwd, env)        continue it by the tool's own session id; return its
+                                         short id, or None if it did not come back
+  stop_short(short_id)                   stop it
+  attach_exec(short_id, cwd, env)        attach this terminal to it
+                                         (these four, used by `souschef`, only if sous chef itself
+                                         runs on this runtime; `souschef` uses claude-bg unless
+                                         SC_CHEF_RUNTIME names another, which only tests do)
   attach_command(rec)                    the command the owner runs to open the session
   skill_available(name, cwd)             whether a session in cwd can run the skill `name`:
                                          True, False, or None when the runtime cannot tell.

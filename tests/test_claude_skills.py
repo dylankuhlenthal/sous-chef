@@ -5,6 +5,9 @@ for ~/.claude, a managed folder, a repo with a project folder inside) and asks w
 a skill is there. Nothing here runs Claude Code; docs/domains/sessions.md says what was
 checked against Claude Code itself.
 
+Python-only: these test the Python runtime's internals, so they run only when the sc under
+test is the Python one (tests/sc_under_test.py).
+
 Run: python3 -m unittest discover -s tests
 """
 import json
@@ -16,12 +19,14 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "lib"))
+from sc_under_test import CODE, IS_PYTHON, python_only
 
-from sc.runtimes import claude_bg  # noqa: E402
+if IS_PYTHON:
+    sys.path.insert(0, str(CODE / "lib"))
+    from sc.runtimes import claude_bg
 
 
+@python_only
 class ClaudeSkillLookupTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

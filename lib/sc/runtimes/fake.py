@@ -12,6 +12,19 @@ was launched with; a resume keeps it, as Claude Code keeps a session's launch fl
 Skills: every skill is available except names listed in "missing_skills" (False) or
 "unknown_skills" (None, cannot tell). Each check is appended to "skill_checks" as
 [name, cwd], so a test can see which working directory was checked.
+
+Sous chef's own session (souschef runs on this runtime when SC_CHEF_RUNTIME is fake):
+  "chef_alive": false makes wake_session_id fail, as when sous chef is not running.
+  start_named adds sessions["fake-chef-<n>"] = {"alive": true, "busy": false, "pid": 1,
+    "kind": "background", "id": "chef-<n>", "name", "launch_prompt", "cwd", "permissions"}
+    (n counts from 1) and returns "chef-<n>".
+  resume_session_id sets the row's "alive" true and "pid" 1, creating it if missing
+    ("kind" background, "id" the first 8 characters of the session id), and returns its
+    "id"; with SC_FAKE_RESUME_FAILS set it returns None and changes nothing.
+  stop_short sets "alive" false and removes "pid" on the row whose "id" matches.
+  attach_exec prints "fake attach <short id>" and returns: nothing is attached.
+Tests model a sous chef open in a terminal with "pid" and "kind": "interactive", and a
+stopped one with no "pid", as `claude agents` lists them.
 """
 import os
 
@@ -97,7 +110,46 @@ def wake_session_id(session_id, text, rows=None):
 
 
 def attach_command(rec):
-    return f"fake attach {rec['id']}"
+    return f"fake attach {rec.get('id') or (rec.get('handle') or {}).get('short_id')}"
+
+
+def start_named(name, prompt, cwd, env, permissions):
+    from . import PERMISSIONS  # here, since runtimes/__init__.py imports this module
+    if permissions not in PERMISSIONS:
+        raise util.SCError(f"unknown permission value '{permissions}' (known: {', '.join(PERMISSIONS)})")
+    data = _load()
+    n = 1
+    while f"fake-chef-{n}" in data["sessions"]:
+        n += 1
+    data["sessions"][f"fake-chef-{n}"] = {"alive": True, "busy": False, "pid": 1, "kind": "background",
+                                          "id": f"chef-{n}", "name": name, "launch_prompt": prompt,
+                                          "cwd": cwd, "permissions": permissions}
+    _save(data)
+    return f"chef-{n}"
+
+
+def resume_session_id(session_id, cwd, env):
+    if os.environ.get("SC_FAKE_RESUME_FAILS"):
+        return None
+    data = _load()
+    row = data["sessions"].setdefault(session_id, {"kind": "background"})
+    row.update({"alive": True, "pid": 1})
+    row.setdefault("id", session_id[:8])
+    _save(data)
+    return row["id"]
+
+
+def stop_short(short_id):
+    data = _load()
+    for row in data["sessions"].values():
+        if row.get("id") == short_id:
+            row["alive"] = False
+            row.pop("pid", None)
+    _save(data)
+
+
+def attach_exec(short_id, cwd, env):
+    print(f"fake attach {short_id}")
 
 
 def skill_available(name, cwd=None):
