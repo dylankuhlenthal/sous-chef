@@ -133,7 +133,7 @@ Sessions are never launched with any of these; see "Which session is calling" in
 
 ```sh
 cd ~/.sous-chef
-python3 -m unittest discover -s tests
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests
 ```
 
 The suite runs the real `sc` command against a temporary home using the `fake` runtime, so it starts no Claude sessions. `WatcherCodeTests` and `CronWakeNoteTests` start real watcher processes from a temporary copy of the code and stop them afterwards; the live watcher is never touched. Claude Code behaviour is checked by hand; `docs/domains/sessions.md` lists what was verified.

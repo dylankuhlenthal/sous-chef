@@ -32,9 +32,10 @@ def _code_root() -> Path:
     root = Path(named)
     if not root.is_absolute():
         raise RuntimeError(f"SC_UNDER_TEST must be an absolute path to a code root, not {named!r}")
-    sc = root / "bin" / "sc"
-    if not sc.is_file() or not os.access(sc, os.X_OK):
-        raise RuntimeError(f"SC_UNDER_TEST={named} is not a code root: {sc} is missing or not executable")
+    for name in ("sc", "souschef"):
+        launcher = root / "bin" / name
+        if not launcher.is_file() or not os.access(launcher, os.X_OK):
+            raise RuntimeError(f"SC_UNDER_TEST={named} is not a code root: {launcher} is missing or not executable")
     return root.resolve()  # as sc sees its own root, so paths it prints compare equal
 
 

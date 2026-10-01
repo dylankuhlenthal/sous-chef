@@ -91,7 +91,7 @@ def copy_code(dest: Path, root: Path = CODE) -> Path:
         elif src.is_file():
             shutil.copy2(src, dest / part)
     for part in LINKED_PATHS:
-        if (root / part).exists():
+        if (root / part).exists() and not (dest / part).is_symlink():
             (dest / part).symlink_to(root / part)
     return dest
 

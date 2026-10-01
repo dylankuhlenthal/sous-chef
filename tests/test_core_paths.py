@@ -23,6 +23,7 @@ class CopyCodeTests(unittest.TestCase):
                 path.write_text(rel)
                 os.utime(path, (1_700_000_000 + n, 1_700_000_000 + n))  # a time a fresh copy would not get
             core_paths.copy_code(dest, root=root)
+            core_paths.copy_code(dest, root=root)  # copying again into the same folder works too
             for rel in ("bin/sc", "lib/sc/x.py", "kinds/general.md", "templates/t.md", "install.sh"):
                 self.assertEqual((dest / rel).read_text(), rel)
             self.assertFalse((dest / "lib/sc/__pycache__").exists())

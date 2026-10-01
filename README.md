@@ -12,7 +12,7 @@ souschef                     # attach, resuming or starting sous chef
 
 Your memory, jobs, kinds and settings live in your own data folder (by default `~/.my-sous-chef`, optionally its own private git repo), reached from here as `my/`. Nothing personal goes in this repo. Details: `docs/operations/running.md`.
 
-Tests: `python3 -m unittest discover -s tests`.
+Tests: `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests`.
 
 ## Docs
 
