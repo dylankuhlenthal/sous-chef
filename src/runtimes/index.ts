@@ -6,7 +6,7 @@ import { fake } from "./fake.js";
 import { Runtime } from "./types.js";
 
 export { DEFAULT_PERMISSIONS, PERMISSIONS, WakeError } from "./types.js";
-export type { Activity, Listing, Runtime, Status } from "./types.js";
+export type { Activity, Listing, Runtime, Status, Stopped, Turns } from "./types.js";
 
 const RUNTIMES: Record<string, Runtime> = { [claudeBg.NAME]: claudeBg, [fake.NAME]: fake };
 export const DEFAULT = claudeBg.NAME;

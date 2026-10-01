@@ -10,6 +10,7 @@ import { run } from "./proc.js";
 import { Dict, expanduser, isDir, isUnder, readText, resolvePath, shellQuote, sorted, strip, truthy } from "./py.js";
 import * as records from "./records.js";
 import { Rec } from "./records.js";
+import { printErr } from "./io.js";
 import * as runtimes from "./runtimes/index.js";
 import { Runtime, WakeError } from "./runtimes/index.js";
 import {
@@ -290,6 +291,16 @@ export async function report(state: string, text: string, key: string | null = n
   const event = await events.append(rec.id, "session", state, text, key);
   if (events.WAKE_STATES.has(state)) {
     event.woke_sous_chef = await chef.wakeChef(`sous chef: session ${rec.id} reported ${state}. Run \`sc events\`.`);
+  }
+  // Best effort: a runtime that keeps a status of its own (the Claude runtime: Porch's self
+  // status) is told too. The event above is the record; this never changes the outcome.
+  const rt = runtimes.get(rec.runtime);
+  if (rt.reportStatus) {
+    try {
+      await rt.reportStatus(rec, state, text);
+    } catch (e) {
+      printErr(`porch status not updated: ${e instanceof Error ? e.message : String(e)}`);
+    }
   }
   return event;
 }

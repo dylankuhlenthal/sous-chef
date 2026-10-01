@@ -184,7 +184,7 @@ export async function cycle(): Promise<{ actions: string[] }> {
         } else {
           await events.append(sid, "watcher", "gone",
             `the session has not been running for ${age(missingSince)}, and sous ` +
-            `chef did not stop it.${whyNot} Check \`sc status ${sid}\` first: if it is ` +
+            `chef did not stop it.${stoppedSentence(st)}${whyNot} Check \`sc status ${sid}\` first: if it is ` +
             `back, nothing is needed. If not, resume it with \`sc resume ${sid}\` (which ` +
             "refuses a session that is running) or clean it up.");
           s.gone_flagged = true;
@@ -201,7 +201,9 @@ export async function cycle(): Promise<{ actions: string[] }> {
     }
 
     // 3. silent stop, held back while the session's own subagents or commands run
-    const turns = records.turns(sid);
+    // Turn times from the runtime when it keeps them (Porch's hooks), else sc's turns.json,
+    // which sessions launched before the move to Porch still write (worker-prompt/worker-stop).
+    const turns = (st.turns ?? records.turns(sid)) as Dict;
     const isIdle = idle(st, turns, pollNow, staleBusy);
     const lastStop = get<number | null>(turns, "last_stop_at", null);
     const lastPrompt = get<number | null>(turns, "last_prompt_at", null);
@@ -441,6 +443,16 @@ function quietSince(lastStop: number | null, flying: number, seenAt: number | nu
   if (pollNow - lastStop! >= inflightMax) return lastStop;
   if (flying) return null;
   return Math.max(lastStop!, seenAt || 0);
+}
+
+/**
+ * What the runtime says about a stopped session, as a sentence (with a leading space) for
+ * the `gone` event, or "" when it says nothing. Text only: no decision reads it, and an
+ * `ended` session is never taken to mean sous chef stopped it (rec.stopped_by_sc says that).
+ */
+function stoppedSentence(st: Status): string {
+  if (!st.stopped) return "";
+  return ` Porch reports it as ${st.stopped.status}${st.stopped.reason ? ` (${st.stopped.reason})` : ""}.`;
 }
 
 /**
