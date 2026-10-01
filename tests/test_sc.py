@@ -1468,19 +1468,28 @@ class RunningWatcherTestCase(ScTestCase):
         super().setUp()
         self.code = core_paths.copy_code(Path(self.tmp.name) / "code", root=CODE)
         self.state = self.home / "state"
+        # A file the watcher counts as code (SC_TEST_CODE_FILE), so a test can change "the code"
+        # the same way whatever language the sc under test is written in.
+        self.marker = self.code / "code-marker"
+        self.marker.write_text("")
 
     def tearDown(self):
         self.stop_watchers()  # before the temporary home (and its watch.pid) is deleted
         super().tearDown()
 
     def copy_sc(self, *args, poll="0.2", stdin=None, env=None):
-        env = {**self.base_env, "SC_WATCH_POLL": poll, **(env or {})}
+        # Every call passes the marker: sc compares the watcher's code with its own, marker included.
+        env = {**self.base_env, "SC_WATCH_POLL": poll, "SC_TEST_CODE_FILE": str(self.marker), **(env or {})}
         return subprocess.run([str(self.code / "bin" / "sc"), *args], capture_output=True, text=True, env=env,
                               timeout=60, input=stdin)
 
     def stop_watchers(self):
-        # Every watcher any test started runs from this test's copy of the code.
-        subprocess.run(["pkill", "-KILL", "-f", f"{self.code}/bin/sc watch"], capture_output=True)
+        # Every watcher any test started runs from this test's copy of the code, whose temporary
+        # path is unique and appears in the command line however the watcher was started.
+        subprocess.run(["pkill", "-KILL", "-f", str(self.code)], capture_output=True)
+
+    def alive(self, pid):
+        return subprocess.run(["kill", "-0", str(pid)], capture_output=True).returncode == 0
 
     def wait_for(self, condition, seconds=10):
         import time
@@ -1503,24 +1512,32 @@ class WatcherCodeTests(RunningWatcherTestCase):
     """A running watcher and the code under it: the copy lets a test change that code without
     touching the code under test."""
 
-    def change_code(self, text="# a change\n"):
-        with open(self.code / "lib" / "sc" / "util.py", "a") as f:
-            f.write(text)
+    def change_code(self):
+        with open(self.marker, "a") as f:
+            f.write("a change\n")
 
     def test_a_watcher_restarts_itself_on_new_code_between_cycles(self):
         self.assertIn("watcher running", self.copy_sc("watch", "--ensure").stdout)
-        before, pid = self.code_record()["code"], self.pid()
+        before, old = self.code_record()["code"], self.pid()
         self.change_code()
         self.assertTrue(self.wait_for(lambda: self.code_record().get("code") not in (None, before)),
                         (self.state / "watch.log").read_text())
-        self.assertEqual(self.pid(), pid)  # replaced itself in place, so no second watcher
+        # One watcher runs: the one that recorded the new code. It may have replaced itself in
+        # place (same pid) or started a new process and exited (TRV-1143 decision 12).
+        pid = self.pid()
+        self.assertEqual(self.code_record()["pid"], pid)
+        self.assertTrue(self.alive(pid))
+        self.assertTrue(self.wait_for(lambda: old == pid or not self.alive(old)))
         self.assertIn("restarting on the new code", (self.state / "watch.log").read_text())
         self.assertIn("## Watcher\nrunning\n", self.copy_sc("summary").stdout)
 
     def test_new_code_that_does_not_load_is_refused_and_the_old_code_keeps_running(self):
         self.copy_sc("watch", "--ensure")
         before = self.code_record()["code"]
-        self.change_code("def broken(:\n")
+        self.change_code()
+        sc = self.code / "bin" / "sc"
+        sc.write_text("def broken(:\n")  # fails in Python, Node and sh alike
+        sc.chmod(0o755)
         self.assertTrue(self.wait_for(lambda: "does not load" in (self.state / "watch.log").read_text()))
         beat = (self.state / "watch.beat").read_text()
         self.assertTrue(self.wait_for(lambda: (self.state / "watch.beat").read_text() != beat))
@@ -1535,8 +1552,7 @@ class WatcherCodeTests(RunningWatcherTestCase):
         out = self.copy_sc("watch", "--ensure")
         self.assertIn("was running older code, so it was restarted", out.stdout)
         self.assertNotEqual(self.pid(), old)
-        self.assertTrue(self.wait_for(lambda: subprocess.run(["kill", "-0", str(old)],
-                                                             capture_output=True).returncode != 0))
+        self.assertTrue(self.wait_for(lambda: not self.alive(old)))
         self.assertIn("watcher stopped between cycles", (self.state / "watch.log").read_text())
         self.assertEqual(self.code_record()["pid"], self.pid())
 
