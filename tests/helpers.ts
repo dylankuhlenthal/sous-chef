@@ -36,7 +36,7 @@ export interface RunOptions {
   stdin?: string;
   env?: Env;
   cwd?: string;
-  /** Kill the program after this long (default 60 s) and fail with what it printed. */
+  /** Kill the program after this long (default 45 s, below the 60 s test timeout, so a hung call is named) and fail with what it printed. */
   timeoutMs?: number;
 }
 
@@ -50,7 +50,7 @@ export function run(program: string, args: string[], opts: RunOptions = {}): Pro
     const timer = setTimeout(() => {
       timedOut = true;
       child.kill("SIGKILL");
-    }, opts.timeoutMs ?? 60_000);
+    }, opts.timeoutMs ?? 45_000);
     child.stdout.on("data", (b: Buffer) => stdout.push(b));
     child.stderr.on("data", (b: Buffer) => stderr.push(b));
     child.on("error", (e) => {
@@ -269,7 +269,7 @@ export class RunningWatcherTest extends ScTest {
   /** Run the copy's sc. Every call passes the marker: sc compares the watcher's code with its
    * own, marker included. Never fails the test by itself: callers check the exit code. */
   copySc(args: string[], o: { poll?: string; stdin?: string; env?: Env } = {}): Promise<Out> {
-    return run(path.join(this.code, "bin", "sc"), args, { stdin: o.stdin, timeoutMs: 60_000,
+    return run(path.join(this.code, "bin", "sc"), args, { stdin: o.stdin, timeoutMs: 45_000,
       env: { ...this.baseEnv, SC_WATCH_POLL: o.poll ?? "0.2", SC_TEST_CODE_FILE: this.marker, ...(o.env ?? {}) } });
   }
 

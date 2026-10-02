@@ -100,7 +100,7 @@ python3 /tmp/switch_over.py --core ~/.sous-chef --check       # every check; cha
 python3 /tmp/switch_over.py --core ~/.sous-chef               # the switch; add --accept-stopped to keep stopped sessions
 ```
 
-Decision 0028 says what it checks and does. One check no longer works as written: the script runs the Python test suite in a staged copy of `origin/main`, and `main` has no Python tests now, so that step tests nothing (Python 3.11 counts no tests as a pass; 3.12 and later fail it). Run `npm ci && npm test` in a fresh clone of `main` yourself first.
+Decision 0028 says what it checks and does. One check no longer works as written: the script runs the Python test suite in a staged copy of `origin/main`, and `main` has no Python tests now, so that step tests nothing. Python 3.11 counts no tests as a pass; Python 3.12 and later fail the step, and the script refuses, so on those run it with a Python 3.11 (`python3.11 /tmp/switch_over.py ...`). Either way, run `npm ci && npm test` in a fresh clone of `main` yourself first, since the script's own check no longer does. After the switch, remove the Python caches git leaves behind (`rm -rf ~/.sous-chef/lib ~/.sous-chef/tests/__pycache__`): the core no longer ignores them, so they show as untracked files and the suite's "every tracked file is core" check fails in that folder.
 
 ## Going back to the Python version
 
