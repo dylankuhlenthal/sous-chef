@@ -96,8 +96,8 @@ describe("WatcherTests", () => {
     expect(out).not.toContain("silent-stop");
   });
 
-  const SUBAGENTS = { detail: "TRV-1116 building, awaiting builder report", in_flight: 4,
-    running: [{ kind: "subagent", label: "Build TRV-1116 web types", since: 1_800_000_000.0 },
+  const SUBAGENTS = { detail: "ABC-102 building, awaiting builder report", in_flight: 4,
+    running: [{ kind: "subagent", label: "Build ABC-102 web types", since: 1_800_000_000.0 },
       { kind: "subagent", label: "rr2 finder: bugs", since: 1_800_000_000.0 },
       { kind: "subagent", label: "rr2 finder: hostile", since: 1_800_000_000.0 },
       { kind: "shell", label: "npm run typecheck", since: 1_800_000_000.0 }] };

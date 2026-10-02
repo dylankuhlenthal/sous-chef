@@ -152,7 +152,7 @@ describe("ResumeAndReleaseTests", () => {
 });
 
 describe("ActivityListingTests", () => {
-  const RUNNING = [{ kind: "subagent", label: "Build TRV-1116 web types", since: 1_799_999_400.0 },
+  const RUNNING = [{ kind: "subagent", label: "Build ABC-102 web types", since: 1_799_999_400.0 },
     { kind: "subagent", label: "rr2 finder: bugs", since: 1_799_999_900.0 },
     { kind: "subagent", label: "rr2 finder: hostile", since: 1_799_999_900.0 },
     { kind: "shell", label: "npm run typecheck", since: 1_799_999_950.0 }];
@@ -161,21 +161,21 @@ describe("ActivityListingTests", () => {
   afterEach(() => t.cleanup());
 
   it("sessions shows what a session is doing on one extra line", async () => {
-    const sid = await t.spawn("general", "Orchestrate TRV-1114");
+    const sid = await t.spawn("general", "Orchestrate ABC-101");
     const other = await t.spawn("general", "Quiet one");
-    t.setFake(sid, { activity: { detail: "TRV-1116 building, awaiting builder report", in_flight: 4,
+    t.setFake(sid, { activity: { detail: "ABC-102 building, awaiting builder report", in_flight: 4,
       running: RUNNING } });
     const out = (await t.sc(["sessions"])).stdout;
     const lines = splitlines(out);
     const row = lines.findIndex((line) => line.includes(sid));
     expect(lines[row]).toContain("idle, 4 in flight");
     expect(lines[row + 1]).toBe(
-      "    doing: TRV-1116 building, awaiting builder report | " +
-      "subagents: Build TRV-1116 web types, rr2 finder: bugs, +1 more");
+      "    doing: ABC-102 building, awaiting builder report | " +
+      "subagents: Build ABC-102 web types, rr2 finder: bugs, +1 more");
     expect(out).not.toContain("npm run typecheck");
     expect(lines.length).toBe(3); // one line for the quiet session, two for the busy one
     expect(lines[2]).toContain(other);
-    expect((await t.sc(["summary"])).stdout).toContain("doing: TRV-1116");
+    expect((await t.sc(["summary"])).stdout).toContain("doing: ABC-102");
   });
 
   it("status lists everything in flight", async () => {
@@ -184,7 +184,7 @@ describe("ActivityListingTests", () => {
     const out = (await t.sc(["status", sid])).stdout;
     expect(out).toContain("doing: reviewing");
     expect(out).toContain("subagents and background commands in flight: 4");
-    expect(out).toContain("subagent: Build TRV-1116 web types, started 10m ago");
+    expect(out).toContain("subagent: Build ABC-102 web types, started 10m ago");
     expect(out).toContain("shell: npm run typecheck, started 50s ago");
   });
 
@@ -385,12 +385,12 @@ describe("WorktreeTests", () => {
 
   it("worktree created from origin with env linked and recorded", async () => {
     const root = makeRepo(t);
-    const out = await t.sc(["worktree", "--repo", root, "--branch", "alx/TRV-1-thing", "--dir", "thing", "--base", "main"]);
+    const out = await t.sc(["worktree", "--repo", root, "--branch", "alx/ABC-1-thing", "--dir", "thing", "--base", "main"]);
     expect(out.stdout).toContain("linked env files from .local/: .env");
     const wt = path.join(root, "thing");
     expect(fs.readlinkSync(path.join(wt, ".env"))).toBe("../.local/.env");
     const branch = spawnSync("git", ["-C", wt, "branch", "--show-current"], { encoding: "utf8" });
-    expect(branch.stdout.trim()).toBe("alx/TRV-1-thing");
+    expect(branch.stdout.trim()).toBe("alx/ABC-1-thing");
     const upstream = spawnSync("git", ["-C", wt, "rev-parse", "--abbrev-ref", "@{u}"], { encoding: "utf8" });
     expect(upstream.status).not.toBe(0);
     const reg = readJson(path.join(t.home, "state", "worktrees.json"));
@@ -463,11 +463,25 @@ describe("SouschefTests", () => {
       .filter(([k]) => k.startsWith("fake-chef-")));
   }
 
-  it("with nothing registered a new sous chef is started in bypass mode", async () => {
+  it("with nothing registered a new sous chef is started in auto mode when the owner chose none", async () => {
     const out = (await souschef()).stdout;
-    expect(out).toBe("started sous chef (chef-1) with permissions: bypass\nfake attach chef-1\n");
+    expect(out).toBe("started sous chef (chef-1) with permissions: auto\n(the default: you have not chosen sous chef's own permission mode; sc owner set --chef-permissions auto|bypass chooses it)\nfake attach chef-1\n");
     const row = started()["fake-chef-1"];
-    expect([row.name, row.permissions, row.cwd]).toEqual(["sous-chef", "bypass", ROOT]);
+    expect([row.name, row.permissions, row.cwd]).toEqual(["sous-chef", "auto", ROOT]);
+  });
+
+  it("a new sous chef starts in the permission mode the owner chose", async () => {
+    await t.sc(["owner", "set", "--chef-permissions", "bypass"]);
+    expect((await souschef()).stdout).toBe("started sous chef (chef-1) with permissions: bypass\nfake attach chef-1\n");
+    expect(started()["fake-chef-1"].permissions).toBe("bypass");
+  });
+
+  it("an owner json with a permission mode sous chef cannot have is refused", async () => {
+    write(path.join(t.home, "owner.json"), JSON.stringify({ name: "Alex", branch_prefix: "alx/", chef_permissions: "ask" }));
+    const out = await souschef([], { ok: false });
+    expect(out.code).toBe(1);
+    expect(out.stderr).toContain("sous chef's own permission mode must be one of auto, bypass");
+    expect(fs.existsSync(path.join(t.home, "state", "fake-runtime.json")), "nothing was started").toBe(false);
   });
 
   it("a running background sous chef is attached not started", async () => {
@@ -493,7 +507,7 @@ describe("SouschefTests", () => {
       fakeRows(rows);
       const out = (await souschef()).stdout;
       const short = Object.keys(rows).length ? "abcd1234" : "chef-1";
-      expect(out).toBe(`resumed sous chef (${short})\nfake attach ${short}\n`);
+      expect(out).toBe(`resumed sous chef (${short}); it keeps the permission mode it was started with\nfake attach ${short}\n`);
       expect(t.fakeState().sessions["chef-1"].pid).toBe(1);
       expect(started()).toEqual({});
     }
@@ -504,7 +518,7 @@ describe("SouschefTests", () => {
     fakeRows({ "chef-1": { alive: false, kind: "background", id: "abcd1234" } });
     const out = (await souschef([], { env: { SC_FAKE_RESUME_FAILS: "1" } })).stdout;
     expect(out).toBe("could not resume the previous sous chef session; starting a new one\n" +
-      "started sous chef (chef-1) with permissions: bypass\nfake attach chef-1\n");
+      "started sous chef (chef-1) with permissions: auto\n(the default: you have not chosen sous chef's own permission mode; sc owner set --chef-permissions auto|bypass chooses it)\nfake attach chef-1\n");
     expect(Object.keys(started())).toEqual(["fake-chef-1"]);
   });
 
@@ -513,10 +527,10 @@ describe("SouschefTests", () => {
     fakeRows({ "chef-1": { alive: true, pid: 1, kind: "background", id: "abcd1234" } });
     const out = (await souschef(["--new"])).stdout;
     expect(out).toBe("stopped the previous sous chef (abcd1234); its conversation is kept\n" +
-      "started sous chef (chef-1) with permissions: bypass\nfake attach chef-1\n");
+      "started sous chef (chef-1) with permissions: auto\n(the default: you have not chosen sous chef's own permission mode; sc owner set --chef-permissions auto|bypass chooses it)\nfake attach chef-1\n");
     const old = t.fakeState().sessions["chef-1"];
     expect(old.alive).toBe(false);
     expect(Object.keys(old)).not.toContain("pid");
-    expect(started()["fake-chef-1"].permissions).toBe("bypass");
+    expect(started()["fake-chef-1"].permissions).toBe("auto");
   });
 });

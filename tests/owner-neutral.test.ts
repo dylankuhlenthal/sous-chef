@@ -1,12 +1,14 @@
-// The core names nobody: no core file names the first owner.
+// The core names nobody: no core file names the first owner, their setup or their work.
 //
 // Sous chef's code, kinds, templates, docs and tests take the owner's name from owner.json
-// (decision 0018). This searches every file on the core's path list (core-paths.ts),
-// ignoring case, for the first owner's name, branch prefix and Slack id, so a new mention
-// fails the suite. The tests run as a neutral owner, Alex.
+// (decision 0018), and the core is public. This searches every file on the core's path list
+// (core-paths.ts), ignoring case, for the first owner's name, branch prefix and Slack id,
+// their private ticket ids, clients and tools, email addresses and home folder paths, so a
+// new mention fails the suite. The tests run as a neutral owner, Alex.
 //
 // Not searched, on purpose:
-//   docs/decisions/   records of who decided what, left as written (decision 0020)
+//   docs/decisions/   records of who decided what; scrubbed once, by hand, before the core
+//                     went public, and not edited again (decision 0030)
 //   this file         it has to name what it searches for (the Slack id only as a hash)
 import { spawnSync } from "node:child_process";
 import crypto from "node:crypto";
@@ -16,7 +18,13 @@ import { describe, expect, it } from "vitest";
 import * as corePaths from "./core-paths.js";
 import { ROOT } from "./helpers.js";
 
-const SEARCH = /dylan|dyl\//i;
+const SEARCH = new RegExp([
+  "dylan", "dyl/", "dylkuhl", // the first owner's name, branch prefix and email
+  "\\bTRV-\\d+", // their private tickets
+  "(?<!-)\\btraverse\\b", "thetraverse", "groundflr", "moodle", "studio-api", // their work and clients (not json-schema-traverse, a dependency)
+  "@gmail\\.com", // email addresses
+  "/Users/[A-Za-z]", "/home/[A-Za-z]", // home folder paths
+].join("|"), "i");
 // The first owner's Slack user id is an identifier, not a name, so it is not written
 // here: anything shaped like a Slack user id is compared by its SHA-256.
 const SLACK_ID = /\bU[A-Z0-9]{8,}\b/g;
@@ -24,21 +32,23 @@ const SLACK_ID_SHA256 = "b57ff6249e9bddf5ad6321be7f364e8b994faabfe55abdd09b88ed6
 const EXCLUDED_DIRS = ["docs/decisions/"];
 // This file, which has to name what it searches for.
 const EXCLUDED_FILES = ["tests/owner-neutral.test.ts"];
-// Stored values from before the owner was a setting, which the code must still read.
-// Each is one named constant, so the old value appears exactly once.
+// Stored values from before the owner was a setting, which the code must still read,
+// and the licence's copyright line. Each appears exactly once.
 const ALLOWED: [string, string][] = [
   ["src/events.ts", 'export const LEGACY_OWNER = "dylan";'],
   ["src/slack.ts", 'export const LEGACY_FROM_OWNER = "from_dylan";'],
   ["tests/stored-values.ts", 'export const LEGACY_OWNER = "dylan";'],
   ["tests/stored-values.ts", 'export const LEGACY_FROM_OWNER = "from_dylan";'],
+  // The copyright holder, who is also the first owner.
+  ["LICENSE", "Copyright (c) 2026 Dylan Kuhlenthal"],
 ];
-// The pinned Porch dependency (docs/decisions/0025): its package name and GitHub source
-// carry its author's account, which is not the core naming its owner. The package name is
-// allowed wherever the code imports it; the GitHub source only in the two package files.
-// Only these exact forms, so any other mention still fails.
+// The Porch dependency (docs/decisions/0033): its npm package name carries its author's
+// account, which is not the core naming its owner, so that exact name is allowed wherever
+// it appears; any other mention still fails.
 const PORCH_PACKAGE = /@dylankuhlenthal\/porch\b/g;
-const PORCH_FILES = ["package.json", "package-lock.json"];
-const PORCH_SOURCE = /github:dylankuhlenthal\/porch#[\w.-]+|github\.com\/dylankuhlenthal\/porch\.git#[0-9a-f]{40}/g;
+// The core's own GitHub repo (the clone URL and the install script's raw URL) carries the
+// same account; only that exact repo path is allowed, anywhere.
+const CORE_REPO = /\bdylankuhlenthal\/sous-chef\b/g;
 
 /** Lines as Python's str.splitlines() splits them. */
 const LINE_BREAKS = new Set(["\n", "\r", "\v", "\f", "\x1c", "\x1d", "\x1e", "\x85", "\u2028", "\u2029"]);
@@ -101,8 +111,7 @@ describe("OwnerNeutralTests", () => {
       const text = readText(path.join(ROOT, rel));
       if (text === null) continue;
       splitlines(text).forEach((line, i) => {
-        let checked = line.replace(PORCH_PACKAGE, "");
-        if (PORCH_FILES.includes(rel)) checked = checked.replace(PORCH_SOURCE, "");
+        const checked = line.replace(PORCH_PACKAGE, "").replace(CORE_REPO, "");
         if (SEARCH.test(checked) && !allowed.has(JSON.stringify([rel, line.trim()]))) {
           found.push(`${rel}:${i + 1}: ${line.trim().slice(0, 120)}`);
         }

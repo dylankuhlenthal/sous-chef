@@ -301,10 +301,12 @@ async function cmdWorktree(args: Args): Promise<void> {
 
 async function cmdOwner(args: Args): Promise<void> {
   if (args.action === "set") {
-    if (!args.name || args.branch_prefix === null) {
-      throw new SCError("usage: sc owner set --name <name> --branch-prefix <prefix>");
+    const given = (v: unknown): string | null => (v === null || v === undefined ? null : String(v));
+    if (args.name === "" || [args.name, args.branch_prefix, args.chef_permissions].every((v) => given(v) === null)) {
+      throw new SCError(ops.OWNER_SET_USAGE);
     }
-    ops.setOwner(String(args.name), String(args.branch_prefix));
+    ops.setOwner({ name: given(args.name), branchPrefix: given(args.branch_prefix),
+      chefPermissions: given(args.chef_permissions) });
     print(`saved ${path.basename(ownerPath())} (tracked in git; commit it to keep it)`);
   }
   const o = owner();
@@ -315,6 +317,8 @@ async function cmdOwner(args: Args): Promise<void> {
   print(`owner: ${o.name}`);
   print(`branch prefix: ${o.branch_prefix || "(none)"}`);
   print(`sessions waiting on the owner show as: waiting on: ${o.lower}`);
+  print(`sous chef's own permission mode: ${o.chef_permissions} (a new sous chef starts in it; ` +
+    "change it with sc owner set --chef-permissions)");
 }
 
 async function cmdSessions(): Promise<void> {
@@ -588,6 +592,9 @@ const COMMANDS: (Command & { fn: (args: Args) => Promise<number | void> })[] = [
       { flags: ["--name"], dest: "name", help: "your name, when the data folder has no owner yet" },
       { flags: ["--branch-prefix"], dest: "branch_prefix",
         help: "your branch prefix, e.g. sam/, when the data folder has no owner yet" },
+      { flags: ["--chef-permissions"], dest: "chef_permissions", choices: ["auto", "bypass"],
+        help: "the permission mode sous chef's own session starts in, when the data folder has not chosen one " +
+          "(default: auto)" },
       { flags: ["--bin-dir"], dest: "bin_dir", help: `where to link sc and souschef (default ${setup.DEFAULT_BIN})` },
       { flags: ["--yes"], dest: "yes", action: "store_true", help: "ask nothing: take the flags, else the defaults" },
     ] },
@@ -595,6 +602,9 @@ const COMMANDS: (Command & { fn: (args: Args) => Promise<number | void> })[] = [
     { dest: "action", nargs: "?", choices: ["show", "set"], default: "show" },
     { flags: ["--name"], dest: "name", help: "set: the owner's name, as sessions and Slack labels show it" },
     { flags: ["--branch-prefix"], dest: "branch_prefix", help: 'set: the owner\'s branch prefix, e.g. sam/ ("" for none)' },
+    { flags: ["--chef-permissions"], dest: "chef_permissions", choices: ["auto", "bypass"],
+      help: "set: the permission mode sous chef's own session starts in (a running sous chef keeps its mode " +
+        "until souschef --new)" },
   ] },
   { name: "sessions", help: "list active sessions", fn: cmdSessions, args: [] },
   { name: "status", help: "details for one session", fn: cmdStatus, args: [

@@ -16,7 +16,7 @@ Code: `src/summary.ts` (`build`, `sessionsTable`), `src/hooks.ts` (`chefStart`, 
 | `pocs.md` | PoCs: where they live, what they proved, what is open. |
 | `repos.md` | Short pointers to repos and their own docs. |
 
-The owner's standing Slack instructions ("slack me when ...") live under a `## Slack me` heading in the memory file for the thing they are about: a thread file, a scheduled job's memory file (named by the job's `memory` field, a path in the data folder such as `memory/inbox-triage.md`), or `my/memory/slack.md` for anything general. `sc events` prints them under the events they concern; see "Standing instructions" in `docs/domains/slack.md`.
+The owner's standing Slack instructions ("slack me when ...") live under a `## Slack me` heading in the memory file for the thing they are about: a thread file, a scheduled job's memory file (named by the job's `memory` field, a path in the data folder such as `memory/daily-digest.md`), or `my/memory/slack.md` for anything general. `sc events` prints them under the events they concern; see "Standing instructions" in `docs/domains/slack.md`.
 
 Other places stay canonical for their content, and memory links to them instead of copying: each repo's docs for how the repo works, and the places the owner's instructions name (their issue tracker, say). Sous chef asks before writing to a repo unless the owner asked for exactly that.
 
@@ -71,6 +71,6 @@ With a sous chef session running as a Claude Code background session (started di
 - A Write into `state/` was denied by the guard with its message. A Write into `memory/` succeeded.
 - `souschef` started sous chef, found it running on a second run, and after it was stopped resumed the same session, which then handled wake-ups from two sessions and acknowledged them.
 
-After the split into a core and a data folder (TRV-1147), with a fresh install in a temporary folder: a plain `claude -p` in the core, in a folder Claude Code had not trusted, printed that it was ignoring `.agents/settings.local.json` because the workspace is not trusted, and its edit of `my/memory/focus.md` was refused as outside the allowed folders. The switch-over was rehearsed on a copy of the owner's folder, and the rehearsed core's summary opened with the owner and their instructions.
+After the split into a core and a data folder (decision 0020), with a fresh install in a temporary folder: a plain `claude -p` in the core, in a folder Claude Code had not trusted, printed that it was ignoring `.agents/settings.local.json` because the workspace is not trusted, and its edit of `my/memory/focus.md` was refused as outside the allowed folders. The switch-over was rehearsed on a copy of the owner's folder, and the rehearsed core's summary opened with the owner and their instructions.
 
 Not yet verified: automatic compaction (only manual), attaching with `souschef` in a real terminal, the owner running sous chef interactively with `claude` in the core, a plain `claude` in a **trusted** core editing `my/memory/` without asking (Claude Code only reads `additionalDirectories` from a trusted folder, and trusting a scratch folder would have meant editing the owner's `~/.claude.json`), and sous chef itself, as a bypass background session, editing `my/memory/` through the link.

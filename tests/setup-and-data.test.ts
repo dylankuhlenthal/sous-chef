@@ -97,7 +97,8 @@ describe("SetupTests", () => {
     const out = (await install(["--name", "Sam", "--branch-prefix", "sam/", "--git"])).stdout;
     expect(out).toContain("made a new data folder");
     expect(fs.readlinkSync(path.join(t.code, "my"))).toBe(data);
-    expect(readJson(path.join(data, "owner.json"))).toEqual({ name: "Sam", branch_prefix: "sam/" });
+    expect(readJson(path.join(data, "owner.json"))).toEqual({ name: "Sam", branch_prefix: "sam/", chef_permissions: "auto" });
+    expect(out).toContain("sous chef's own session will start in permission mode auto");
     for (const rel of ["memory/focus.md", "memory/threads/index.md", "memory/working-with-sam.md",
       "instructions.md", "worker-instructions.md", ".gitignore"]) {
       expect(isFile(path.join(data, rel)), rel).toBe(true);
@@ -141,10 +142,45 @@ describe("SetupTests", () => {
     fs.writeFileSync(path.join(data, "owner.json"), JSON.stringify({ name: "Kim", branch_prefix: "kim/" }));
     const out = (await install(["--name", "Other"])).stdout;
     expect(out).toContain("using the data folder");
-    expect(readJson(path.join(data, "owner.json")).name).toBe("Kim");
+    expect(readJson(path.join(data, "owner.json"))).toEqual({ name: "Kim", branch_prefix: "kim/" });
     expect(fs.existsSync(path.join(data, "instructions.md"))).toBe(false);
     expect(read(path.join(data, "memory", "focus.md"))).toBe("mine\n");
     expect(fs.readlinkSync(path.join(t.code, "my"))).toBe(data);
+  });
+
+  it("sous chef's own permission mode is the flag's, else auto, and an existing one is kept", async () => {
+    await install(["--name", "Sam", "--no-git", "--chef-permissions", "bypass"]);
+    expect(readJson(path.join(data, "owner.json")).chef_permissions).toBe("bypass");
+    const out = (await install(["--chef-permissions", "auto"])).stdout;
+    expect(out).toContain("left sous chef's own permission mode at bypass; change it with sc owner set");
+    expect(readJson(path.join(data, "owner.json")).chef_permissions).toBe("bypass");
+  });
+
+  it("an existing data folder without a permission mode gets the flag's", async () => {
+    fs.mkdirSync(path.join(data, "memory"), { recursive: true });
+    fs.writeFileSync(path.join(data, "owner.json"), JSON.stringify({ name: "Kim", branch_prefix: "kim/" }));
+    await install(["--chef-permissions", "bypass"]);
+    expect(readJson(path.join(data, "owner.json"))).toEqual({ name: "Kim", branch_prefix: "kim/", chef_permissions: "bypass" });
+  });
+
+  it("an sc or souschef link to something else is left alone", async () => {
+    fs.mkdirSync(bin, { recursive: true });
+    const other = path.join(t.tmp, "other-tool", "sc");
+    fs.mkdirSync(path.dirname(other));
+    fs.writeFileSync(other, "#!/bin/sh\n", { mode: 0o755 });
+    fs.symlinkSync(other, path.join(bin, "sc"));
+    const out = (await install(["--name", "Sam", "--no-git"])).stdout;
+    expect(out).toContain(`left ${path.join(bin, "sc")} alone: it points to ${other}, not this sous chef`);
+    expect(fs.readlinkSync(path.join(bin, "sc"))).toBe(other);
+    expect(fs.readlinkSync(path.join(bin, "souschef"))).toBe(path.join(fs.realpathSync(t.code), "bin", "souschef"));
+  });
+
+  it("an sc link to something that no longer exists is replaced", async () => {
+    fs.mkdirSync(bin, { recursive: true });
+    fs.symlinkSync(path.join(t.tmp, "moved", "bin", "sc"), path.join(bin, "sc"));
+    const out = (await install(["--name", "Sam", "--no-git"])).stdout;
+    expect(out).toContain(`replaced ${path.join(bin, "sc")}`);
+    expect(fs.readlinkSync(path.join(bin, "sc"))).toBe(path.join(fs.realpathSync(t.code), "bin", "sc"));
   });
 
   it("a data folder cloned from a repo keeps its owner", async () => {

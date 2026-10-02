@@ -2,7 +2,8 @@
   "name": "sous-chef",
   "version": "0.0.0",
   "private": true,
-  "description": "Sous chef: memory and session manager for Claude Code sessions.",
+  "description": "An agent that tracks your work and launches and manages Claude Code background sessions for you.",
+  "license": "MIT",
   "type": "module",
   "engines": {
     "node": ">=22"
@@ -18,7 +19,7 @@
     "test": "npm run build && vitest run"
   },
   "dependencies": {
-    "@dylankuhlenthal/porch": "github:dylankuhlenthal/porch#v0.1.0",
+    "@dylankuhlenthal/porch": "^0.2.0",
     "proper-lockfile": "^4.1.2"
   },
   "devDependencies": {

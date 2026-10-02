@@ -1,6 +1,6 @@
 // A fake of sous chef's messaging relay, for the tests: the relay's routes and answers, in memory.
 //
-// It follows the relay's contract (`sous-chef-messaging-relay/docs/architecture.md`): the
+// It follows the relay's contract (the relay's own `docs/architecture.md`): the
 // bearer key in the Authorization header, the same 401 for any bad key, the same 404 for
 // anything sous chef may not read or post to, 502 with Slack's error code, and the neutral
 // envelope. It listens on 127.0.0.1 (a free port) in the test process, so the `sc`

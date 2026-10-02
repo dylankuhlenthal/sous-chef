@@ -119,7 +119,7 @@ function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-/** Whether the instructions name the skill as /<skill>, as a whole name (so /shape-gui is not /shape). */
+/** Whether the instructions name the skill as /<skill>, as a whole name (so /shape-lite is not /shape). */
 export function namesSkill(body: string, skill: string): boolean {
   return new RegExp(`/${escapeRegExp(skill)}(?![A-Za-z0-9_:-]|\\.\\w)`, "u").test(body);
 }

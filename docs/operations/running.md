@@ -2,31 +2,40 @@
 
 ## Requirements
 
-- macOS or Linux with Node 22 or later and `npm` (developed and tested on Node 22.14). The two runtime dependencies, Porch and `proper-lockfile`, are installed by `npm ci` into the core's `node_modules/`. Porch comes from its private GitHub repo, pinned to a tag (decision 0025), so `npm ci` needs read access to that repo (`package-lock.json` records it as an SSH URL) and whatever Porch's own build needs: npm runs Porch's `prepare` build on install, which installs its development dependencies, including the native module `node-pty`.
+- macOS or Linux with Node 22 or later and `npm` (developed and tested on Node 22.14). The two runtime dependencies, Porch and `proper-lockfile`, are installed by `npm ci` into the core's `node_modules/`. Porch comes from npm (`@dylankuhlenthal/porch`, at the exact version `package-lock.json` records; decision 0033), already built, so installing needs nothing beyond npm's public registry.
 - Claude Code with background sessions (`claude --bg`), logged in. Verified with 2.1.274.
 - `git`, for `sc worktree`, for `sc cleanup`'s unlanded-work check, and for keeping the data folder in a git repo.
 
 ## Install
 
-Clone the core to `~/.sous-chef`, then run its install script:
+Pipe the install script into a shell:
 
 ```sh
-git clone <the sous chef core repo> ~/.sous-chef
+curl -fsSL https://raw.githubusercontent.com/dylankuhlenthal/sous-chef/main/install.sh | bash
+```
+
+Or, to read the script before running it, clone the core to `~/.sous-chef` and run it from there:
+
+```sh
+git clone https://github.com/dylankuhlenthal/sous-chef.git ~/.sous-chef
 ~/.sous-chef/install.sh
 ```
 
-`install.sh` checks that `node`, `npm`, `git` and `claude` are on `PATH` (naming every missing one), that `node` is version 22 or later, and says which Node it found (`using Node v22.14.0 at <path>; hooks and the watcher run this Node`). It then brings the install up to date, doing only what is out of date. When `bin/sc --help` fails, it runs `npm ci` if `node_modules/.package-lock.json` is missing, if `bin/sc` says the dependencies are older than `package-lock.json`, or if the build is missing or did not finish and `package-lock.json` is newer than the installed dependencies (`bin/sc` can only compare the two once a build has finished), then `npm run build` if `bin/sc` still fails. It refuses to reinstall a `node_modules` that is a link to another install. Last, it runs `sc setup` (`src/setup.ts`), which asks:
+Piped, `install.sh` is not running from a core checkout, so it first clones the core's `main` into `~/.sous-chef` and runs that clone's own `install.sh`; everything below is then the same as the clone-first route. A folder already at `~/.sous-chef` that is a sous chef core is used as it is (it is not updated; see "The build, and updating after a pull"), and any other non-empty folder there is refused. `SOUS_CHEF_REPO` and `SOUS_CHEF_DIR` change where it clones from and to, for a fork. Flags go after `bash -s --`, for example `curl -fsSL <url> | bash -s -- --yes --name Sam`. Why: decision 0032 (install.sh also runs piped from the web).
+
+`install.sh` checks that `node`, `npm`, `git` and `claude` are on `PATH` (naming every missing one), that `node` is version 22 or later, and says which Node it found (`using Node v22.14.0 at <path>; hooks and the watcher run this Node`). It then brings the install up to date, doing only what is out of date. When `bin/sc --help` fails, it runs `npm ci` if `node_modules/.package-lock.json` is missing, if `bin/sc` says the dependencies are older than `package-lock.json`, or if the build is missing or did not finish and `package-lock.json` is newer than the installed dependencies (`bin/sc` can only compare the two once a build has finished), then `npm run build` if `bin/sc` still fails. It refuses to reinstall a `node_modules` that is a link to another install. Last, it runs `sc setup` (`src/setup.ts`), which asks the questions below. When the script came in on a pipe, its standard input is the script, so `sc setup` reads its answers from the terminal (`/dev/tty`) instead; with no terminal at all, the flags and defaults apply and nothing waits.
 
 | Question | What happens |
 | --- | --- |
 | Data folder | Default `~/.my-sous-chef`. An existing sous chef data folder is used as it is. Otherwise you can clone one from a git URL, or a new one is made with starter files: the memory files the summary shows, a feedback file named in `instructions.md`, empty `cron/` and `kinds/`, `instructions.md` and `worker-instructions.md` with a comment saying what they are for, and a `.gitignore` for `state/` and `.env`. |
 | Owner | Only when the folder has no `owner.json`: your name and branch prefix. `sc owner set` changes them later. |
+| Sous chef's own permission mode | Only when `owner.json` has none: `auto` or `bypass`, after a paragraph on what each risks ("Permission mode" under "Start sous chef" below). Default `auto`. `sc owner set --chef-permissions` changes it later. |
 | Track in git? | A new folder only: `git init` and a first commit. |
 | Push to a remote? | When the data folder is a git repo with no `origin`: the URL of an empty private repo you made. It never creates repos. Once pushed, the watcher keeps it committed and pushed (`docs/domains/watcher.md`, check 9). |
 
-Then it makes the `my` link in the core, links `sc` and `souschef` into `~/.local/bin`, writes `.agents/settings.local.json` so a plain `claude` in the core may edit the data folder as it edits the core, and says how to set up Slack. Every question has a flag (`--data`, `--clone`, `--git`/`--no-git`, `--push-url`, `--name`, `--branch-prefix`, `--bin-dir`, `--yes`; `sc setup --help`), and running it again is safe: what is in place is left alone. It refuses a `my` link that points somewhere else (remove the link first; the data behind it is not touched) and a core folder that still holds `memory/` and `state/`.
+Then it makes the `my` link in the core, links `sc` and `souschef` into `~/.local/bin`, writes `.agents/settings.local.json` so a plain `claude` in the core may edit the data folder as it edits the core, and says how to set up Slack. Every question has a flag (`--data`, `--clone`, `--git`/`--no-git`, `--push-url`, `--name`, `--branch-prefix`, `--chef-permissions`, `--bin-dir`, `--yes`; `sc setup --help`). With `--yes`, a new `owner.json` gets `auto`, and an existing one without a permission mode is left as it is (no value means `auto`). Running it again is safe: what is in place is left alone. It refuses a `my` link that points somewhere else (remove the link first; the data behind it is not touched) and a core folder that still holds `memory/` and `state/`. It leaves alone an `sc` or `souschef` in the bin folder that is a file, or a link to something else that exists, and says how to replace it; a link to something that no longer exists (a core that moved, say) is replaced.
 
-Claude Code only reads `.agents/settings.local.json` in a folder you have trusted, so if you run plain `claude` in the core, accept its trust prompt the first time. Sous chef itself runs in bypass mode (decision 0015) and does not need it.
+Claude Code only reads `.agents/settings.local.json` in a folder you have trusted, so if you run plain `claude` in the core, accept its trust prompt the first time. A sous chef in `auto` mode relies on it to edit the data folder without asking; one in `bypass` mode does not need it.
 
 Sessions do not need `sc` on `PATH`: their brief gives its full path.
 
@@ -66,7 +75,7 @@ Run `souschef` from any terminal. It uses the session registered in `my/state/ch
 | --- | --- |
 | Sous chef is running in the background | Attaches to it |
 | Sous chef is stopped | Resumes the same session in the background (checking it really is the same one), then attaches |
-| Nothing registered, or the resume did not bring the session back | Starts a new background session named `sous-chef` in bypass permission mode, with a short first message, then attaches |
+| Nothing registered, or the resume did not bring the session back | Starts a new background session named `sous-chef` in the owner's permission mode (`chef_permissions`), says which (and, when the owner never chose one, that it is the default and how to choose), sends a short first message, then attaches |
 | Sous chef is open in a terminal (someone ran `claude` in the core) | Says so and exits, since that session cannot be attached to |
 | There is no data folder | Says to run `install.sh`, and exits |
 
@@ -75,7 +84,12 @@ Run `souschef` from any terminal. It uses the session registered in `my/state/ch
 - `souschef --new` stops the current background sous chef (its conversation is kept) and starts a fresh one. If sous chef is already stopped it just starts a fresh one, and if it is open in a terminal it refuses, since it cannot stop that one for you.
 - `souschef --print` does everything except attach, and prints the attach command. Without `--print`, `souschef` replaces itself with `claude attach`, so you land in the session and your shell returns when you leave it.
 
-**Permission mode.** A sous chef that `souschef` starts runs in bypass mode: nothing it does waits for a person. The owner chose this knowing sous chef reads email and Slack from other people and can run commands, push and write to Linear, so a mistake or a hidden instruction it wrongly follows goes ahead unseen; only its instructions stand in the way. See decision 0015 (sous chef itself runs in bypass mode). A resumed sous chef keeps the mode it was started with, so a sous chef started before this change keeps its old mode until `souschef --new`. Sessions sous chef spawns take their kind's mode (see "Permissions" in `docs/domains/sessions.md`). The setting is `PERMISSIONS` in `src/souschef.ts`.
+**Permission mode.** A sous chef that `souschef` starts runs in the mode the owner chose, `chef_permissions` in `my/owner.json` (`sc owner` shows it; `auto` when unset). `sc setup` asks, after explaining both (`CHEF_PERMISSIONS_RISK` in `src/setup.ts`):
+
+- `auto`: Claude Code's classifier checks each action, and one it judges risky waits for a person. Sous chef can then sit at a prompt while you are away, with nothing watching sous chef itself to tell you.
+- `bypass`: nothing it does waits for a person. Sous chef reads what sessions report (and Slack, if set up, including messages from other people) and can run commands, push branches and write to your tools, so a mistake, or an instruction hidden in what it reads that it wrongly follows, goes ahead unseen; only its instructions stand in the way.
+
+Change it with `sc owner set --chef-permissions <auto|bypass>`. A resumed sous chef keeps the mode it was started with (`souschef` says so), so a changed setting takes effect at the next `souschef --new`. Sessions sous chef spawns take their kind's mode (see "Permissions" in `docs/domains/sessions.md`). See decision 0031 (sous chef's own permission mode is the owner's setting), which replaced decision 0015 (sous chef itself runs in bypass mode).
 
 Running `claude` in `~/.sous-chef` also works and registers that session as sous chef, but it only lives as long as that terminal. Running only one sous chef at a time is expected; the startup summary warns if a different sous chef session was registered before.
 
@@ -88,33 +102,9 @@ Sessions sous chef launched keep running; `sc sessions` lists them and `sc stop 
 
 The next `souschef` resumes the same sous chef, in the mode it was started with. To start a fresh one instead (for example to pick up a new permission mode), run `souschef --new`; it also works straight away without the steps above, since it stops the running sous chef itself. The new sous chef starts the watcher again.
 
-## Switching from the Python sous chef to TypeScript
+## An install still on the Python sous chef
 
-The core moved from Python to TypeScript, and `~/.sous-chef` was switched over with a one-off script (decision 0028, switching the live sous chef to TypeScript). The Python code and tests have since left the core. To switch another install that still runs the Python core, use the same script: it is in the core's history, in the commit before the one that deleted it. From a plain terminal, never from inside a Claude session:
-
-```sh
-git -C ~/.sous-chef fetch origin
-c=$(git -C ~/.sous-chef log -1 --full-history --diff-filter=D --format=%H origin/main -- switch-over/switch_over.py)
-git -C ~/.sous-chef show "$c^:switch-over/switch_over.py" > /tmp/switch_over.py
-python3 /tmp/switch_over.py --core ~/.sous-chef --check       # every check; changes nothing live
-python3 /tmp/switch_over.py --core ~/.sous-chef               # the switch; add --accept-stopped to keep stopped sessions
-```
-
-Decision 0028 says what it checks and does. One check no longer works as written: the script runs the Python test suite in a staged copy of `origin/main`, and `main` has no Python tests now, so that step tests nothing. Python 3.11 counts no tests as a pass; Python 3.12 and later fail the step, and the script refuses, so on those run it with a Python 3.11 (`python3.11 /tmp/switch_over.py ...`). Either way, run `npm ci && npm test` in a fresh clone of `main` yourself first, since the script's own check no longer does. After the switch, remove the Python caches git leaves behind (`rm -rf ~/.sous-chef/lib ~/.sous-chef/tests/__pycache__`): the core no longer ignores them, so they show as untracked files and the suite's "every tracked file is core" check fails in that folder.
-
-## Going back to the Python version
-
-The last Python commit is tagged `last-python`, and the tag keeps the whole Python tree, so going back still works now that the Python code has left `main`. It needs Python 3 again, since that is what the Python sous chef runs on. To go back:
-
-```sh
-python3 /tmp/switch_over.py --core ~/.sous-chef --rollback
-```
-
-It stops sous chef and the TypeScript watcher, checks out `last-python` (a detached HEAD; `dist/` and `node_modules/` stay, untracked and unused) and runs `souschef --print`, which resumes the same conversation on the Python code; its startup hook starts a Python watcher. By hand it is the same steps in the same order: `claude stop <short id>` (`sc chef` shows it), `kill $(cat ~/.sous-chef/my/state/watch.pid)` and wait until that process has gone, `git -C ~/.sous-chef checkout last-python`, `souschef`. The stops are not optional: a checkout does not change `dist/`, so the TypeScript watcher would keep running, and the Python startup hook cannot see its lock (Python and TypeScript lock differently), so it would start a second watcher beside it.
-
-After going back, sessions the TypeScript sc launched cannot run their hooks: their saved hook commands run `bin/sc` with Node, which cannot run the Python one, so each hook fails with a hook error (including the guard on `state/`); `sc report` from them still works. They also keep their turn times in Porch, not in `turns.json`, so the Python watcher's silent-stop check (`docs/domains/watcher.md`) never fires for them. Stop them before going back if you can (the rollback lists the ones still running), and relaunch the ones you still need. Sessions launched before the switch are not affected.
-
-To go forward again: `git -C ~/.sous-chef checkout main`, then the switch-over script again (without `--rollback`). It sees that `last-python` already names the Python commit and makes no new tag.
+The core moved from Python to TypeScript, and the Python code has left it. Only the first owner's install ever ran the Python core. The one-off script that switched it over, and the way back to the Python version (the tag `last-python`), are kept in decision 0028 (switching the live sous chef to TypeScript), under "Switching over and going back".
 
 ## How you hear about things
 

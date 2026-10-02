@@ -7,6 +7,7 @@ import * as events from "./events.js";
 import * as inbox from "./inbox.js";
 import * as kinds from "./kinds.js";
 import { run } from "./proc.js";
+import { JSONDecodeError } from "./pyjson.js";
 import { Dict, expanduser, isDir, isUnder, readText, resolvePath, shellQuote, sorted, strip, truthy } from "./py.js";
 import * as records from "./records.js";
 import { Rec } from "./records.js";
@@ -14,21 +15,52 @@ import { printErr } from "./io.js";
 import * as runtimes from "./runtimes/index.js";
 import { Runtime, WakeError } from "./runtimes/index.js";
 import {
-  archiveDir, CODE_ROOT, envFloat, home, mkdirs, now, owner, ownerName, ownerPath, ownerProblem, ownerText, render, requireOwner, scBin, SCError, sleep, templatesDir, userKindsDir, WAITING_VALUES as UTIL_WAITING_VALUES, writeJson,
+  archiveDir, chefPermissionsProblem, CODE_ROOT, envFloat, home, mkdirs, now, owner, ownerName, ownerPath, ownerProblem, ownerText, readJson, render, requireOwner, scBin, SCError, sleep, templatesDir, userKindsDir, WAITING_VALUES as UTIL_WAITING_VALUES, writeJson,
 } from "./util.js";
 import type { Owner } from "./util.js";
 import * as worktrees from "./worktrees.js";
 
 export const WAITING_VALUES = UTIL_WAITING_VALUES;
 
-/** Write owner.json (util.owner). Refuses a name that would read as another waiting-on value. */
-export function setOwner(name: string, branchPrefix: string): Owner | null {
-  name = strip(name || "");
-  const problem = ownerProblem(name, branchPrefix);
+export interface OwnerChange {
+  name?: string | null;
+  branchPrefix?: string | null;
+  chefPermissions?: string | null;
+}
+
+/**
+ * Write owner.json (util.owner), changing only the fields given. Without a usable owner.json
+ * it needs both the name and the branch prefix. Refuses a name that would read as another
+ * waiting-on value, and a permission mode sous chef's own session cannot have. A file
+ * without a usable chef_permissions keeps none unless one is given (none means the default).
+ */
+export function setOwner(change: OwnerChange): Owner | null {
+  // The fields already stored that are still usable, even when another field is not, so one
+  // bad field can be fixed on its own.
+  let stored: Dict = {};
+  try {
+    const data = readJson<unknown>(ownerPath());
+    if (data && typeof data === "object" && !Array.isArray(data)) stored = data as Dict;
+  } catch (e) {
+    if (!(e instanceof JSONDecodeError)) throw e;
+  }
+  const usable = ownerProblem(stored.name, stored.branch_prefix) === null;
+  const given = (v: string | null | undefined): v is string => v !== null && v !== undefined;
+  if (!usable && !(given(change.name) && given(change.branchPrefix))) throw new SCError(OWNER_SET_USAGE);
+  const name = strip(given(change.name) ? change.name : (stored.name as string));
+  const branchPrefix = given(change.branchPrefix) ? change.branchPrefix : (stored.branch_prefix as string);
+  const problem = ownerProblem(name, branchPrefix) ??
+    (given(change.chefPermissions) ? chefPermissionsProblem(change.chefPermissions) : null);
   if (problem) throw new SCError(problem);
-  writeJson(ownerPath(), { name, branch_prefix: branchPrefix });
+  const data: Dict = { name, branch_prefix: branchPrefix };
+  if (given(change.chefPermissions)) data.chef_permissions = change.chefPermissions;
+  else if (chefPermissionsProblem(stored.chef_permissions) === null) data.chef_permissions = stored.chef_permissions;
+  writeJson(ownerPath(), data);
   return owner();
 }
+
+export const OWNER_SET_USAGE = "usage: sc owner set [--name <name>] [--branch-prefix <prefix>] " +
+  "[--chef-permissions auto|bypass]; with no owner yet, --name and --branch-prefix are both needed";
 
 // Hook commands run Node by its absolute path, then sc by its absolute path: a hook may not
 // get the terminal's PATH, and Node here usually comes from nvm or Homebrew. The hooks that
