@@ -36,6 +36,6 @@ The interface also has the four methods `souschef` uses besides `listing` and `a
 
 ## Steps
 
-1. Add `src/runtimes/<name>.ts`, exporting an object that implements `Runtime`, and add it to `RUNTIMES` in `src/runtimes/index.ts`. Run any program through `run` in `src/proc.ts` (it never blocks and never throws on a non-zero exit), and do not import anything dynamically: a rebuild replaces `dist/` while the watcher runs.
+1. Add `src/runtimes/<name>.ts`, exporting an object that implements `Runtime`, and add it to `RUNTIMES` in `src/runtimes/index.ts`. Run any program through `run` in `src/proc.ts` (it never blocks, never throws on a non-zero exit, and returns at its timeout even when the program's own children keep its output open), and do not import anything dynamically: a rebuild replaces `dist/` while the watcher runs.
 2. Decide how `sc spawn` selects it. Today the only way is the hidden `--runtime` flag, which the tests use.
 3. Verify the tool's behaviour by running it, and record what was verified in `docs/domains/sessions.md` in the same form as the Claude section, including how `sc spawn` selects the runtime (today only the hidden `--runtime` flag).
