@@ -1,7 +1,7 @@
 // Claude Code background sessions (`claude --bg`), reached through Porch used as a library
 // (docs/decisions/0026). The runtime name `claude-bg` is what records and chef.json store.
 //
-// What goes through Porch (the package in package.json, pinned to a tag, docs/decisions/0025):
+// What goes through Porch (the npm package in package.json, docs/decisions/0033):
 // - listing and status: `porch.list(harness, {all: true})` and `porch.observe`, which read
 //   `claude agents --json`, Claude Code's job files and Porch's own session records. How an
 //   observation becomes sous chef's Status is `statusOf` below, and the table in

@@ -19,7 +19,7 @@
     "test": "npm run build && vitest run"
   },
   "dependencies": {
-    "@dylankuhlenthal/porch": "github:dylankuhlenthal/porch#v0.1.0",
+    "@dylankuhlenthal/porch": "^0.2.0",
     "proper-lockfile": "^4.1.2"
   },
   "devDependencies": {

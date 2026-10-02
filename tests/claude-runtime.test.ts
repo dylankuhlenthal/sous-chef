@@ -9,9 +9,8 @@ import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
-import {
-  createFakeAdapter, fake, type HarnessIO, Porch, RecordStore, sessionsDir,
-} from "@dylankuhlenthal/porch";
+import { type HarnessIO, Porch, sessionsDir } from "@dylankuhlenthal/porch";
+import { createFakeAdapter, fake, RecordStore } from "@dylankuhlenthal/porch/testing";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { workerSettings } from "../src/ops.js";
 import {

@@ -42,16 +42,13 @@ const ALLOWED: [string, string][] = [
   // The copyright holder, who is also the first owner.
   ["LICENSE", "Copyright (c) 2026 Dylan Kuhlenthal"],
 ];
-// The pinned Porch dependency (docs/decisions/0025): its package name and GitHub source
-// carry its author's account, which is not the core naming its owner. The package name is
-// allowed wherever the code imports it; the GitHub source only in the two package files.
-// Only these exact forms, so any other mention still fails.
+// The Porch dependency (docs/decisions/0033): its npm package name carries its author's
+// account, which is not the core naming its owner, so that exact name is allowed wherever
+// it appears; any other mention still fails.
 const PORCH_PACKAGE = /@dylankuhlenthal\/porch\b/g;
 // The core's own GitHub repo (the clone URL and the install script's raw URL) carries the
 // same account; only that exact repo path is allowed, anywhere.
 const CORE_REPO = /\bdylankuhlenthal\/sous-chef\b/g;
-const PORCH_FILES = ["package.json", "package-lock.json"];
-const PORCH_SOURCE = /github:dylankuhlenthal\/porch#[\w.-]+|github\.com\/dylankuhlenthal\/porch\.git#[0-9a-f]{40}/g;
 
 /** Lines as Python's str.splitlines() splits them. */
 const LINE_BREAKS = new Set(["\n", "\r", "\v", "\f", "\x1c", "\x1d", "\x1e", "\x85", "\u2028", "\u2029"]);
@@ -114,8 +111,7 @@ describe("OwnerNeutralTests", () => {
       const text = readText(path.join(ROOT, rel));
       if (text === null) continue;
       splitlines(text).forEach((line, i) => {
-        let checked = line.replace(PORCH_PACKAGE, "").replace(CORE_REPO, "");
-        if (PORCH_FILES.includes(rel)) checked = checked.replace(PORCH_SOURCE, "");
+        const checked = line.replace(PORCH_PACKAGE, "").replace(CORE_REPO, "");
         if (SEARCH.test(checked) && !allowed.has(JSON.stringify([rel, line.trim()]))) {
           found.push(`${rel}:${i + 1}: ${line.trim().slice(0, 120)}`);
         }

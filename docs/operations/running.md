@@ -2,7 +2,7 @@
 
 ## Requirements
 
-- macOS or Linux with Node 22 or later and `npm` (developed and tested on Node 22.14). The two runtime dependencies, Porch and `proper-lockfile`, are installed by `npm ci` into the core's `node_modules/`. Porch comes from its private GitHub repo, pinned to a tag (decision 0025), so `npm ci` needs read access to that repo (`package-lock.json` records it as an SSH URL) and whatever Porch's own build needs: npm runs Porch's `prepare` build on install, which installs its development dependencies, including the native module `node-pty`.
+- macOS or Linux with Node 22 or later and `npm` (developed and tested on Node 22.14). The two runtime dependencies, Porch and `proper-lockfile`, are installed by `npm ci` into the core's `node_modules/`. Porch comes from npm (`@dylankuhlenthal/porch`, at the exact version `package-lock.json` records; decision 0033), already built, so installing needs nothing beyond npm's public registry.
 - Claude Code with background sessions (`claude --bg`), logged in. Verified with 2.1.274.
 - `git`, for `sc worktree`, for `sc cleanup`'s unlanded-work check, and for keeping the data folder in a git repo.
 

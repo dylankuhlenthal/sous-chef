@@ -14,7 +14,7 @@ Any Claude Code session started in this folder is sous chef: its SessionStart ho
 
 ## Stack
 
-TypeScript on Node 22 or later (`src/`, compiled into `dist/`), with two runtime dependencies: Porch (how sous chef reaches Claude sessions, a private GitHub dependency pinned to a tag) and `proper-lockfile`. Claude Code background sessions (`claude --bg`), Claude Code hooks, markdown memory files.
+TypeScript on Node 22 or later (`src/`, compiled into `dist/`), with two runtime dependencies: Porch (how sous chef reaches Claude sessions, from npm as `@dylankuhlenthal/porch`) and `proper-lockfile`. Claude Code background sessions (`claude --bg`), Claude Code hooks, markdown memory files.
 
 ## Layout & filing
 
