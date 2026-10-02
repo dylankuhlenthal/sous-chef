@@ -19,7 +19,7 @@ export const CORE_PATHS = [
   "kinds/general.md", "kinds/investigate.md",
   "AGENTS.md", "CLAUDE.md", ".claude", ".gitignore", "README.md", "install.sh",
   "src/", "package.json", "package-lock.json", "tsconfig.json", "tsconfig.build.json", "eslint.config.js",
-  "vitest.config.ts", "scripts/", "LICENSE", "SECURITY.md", "CONTRIBUTING.md", ".github/",
+  "vitest.config.ts", "scripts/", "LICENSE", "SECURITY.md", "CONTRIBUTING.md", ".github/", "assets/",
 ] as const;
 
 // Inside a core folder but never core: written per install, gitignored.

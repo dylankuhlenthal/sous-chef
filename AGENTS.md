@@ -25,7 +25,7 @@ The core:
 - `bin/sc`, `src/`: the `sc` command. Run `sc --help`. `bin/sc` and `bin/souschef` (how the owner opens you from any terminal) are small launchers: they check Node and the build, then run the compiled code in `dist/` (gitignored), which `npm run build` makes from `src/`. They refuse a build that is missing or older than `src/`, with the command that fixes it. `package.json` lists the dependencies and scripts. `install.sh`: sets up an install (it brings the dependencies and the build up to date, then runs `sc setup`); piped from the web, it clones the core first.
 - `kinds/`: the core kinds, one file per session kind. `templates/worker-brief.md`: the instructions every session gets.
 - `docs/`: how sous chef works, filed by the documentation standards in `docs/patterns/documentation.md` (read it before changing docs). `tests/`: the test suite.
-- `README.md`, `LICENSE` (MIT), `SECURITY.md`, `CONTRIBUTING.md`: for people reading the public repo. `.github/`: the CI workflow and the branch ruleset on `main` (`docs/operations/going-public.md`).
+- `README.md`, `LICENSE` (MIT), `SECURITY.md`, `CONTRIBUTING.md`: for people reading the public repo. `assets/`: the icon at the top of the README. `.github/`: the CI workflow and the branch ruleset on `main` (`docs/operations/going-public.md`).
 
 The data folder (`my/`):
 
