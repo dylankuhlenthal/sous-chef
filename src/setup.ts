@@ -55,7 +55,7 @@ export interface SetupArgs {
 }
 
 /** Answers from flags first; otherwise from the terminal, unless --yes or there is none. */
-class Asker {
+export class Asker {
   interactive: boolean;
   private rl: Interface | null = null;
 
@@ -63,7 +63,7 @@ class Asker {
     this.interactive = !yes && stdinIsTty();
   }
 
-  private async input(prompt: string): Promise<string> {
+  protected async input(prompt: string): Promise<string> {
     this.rl ??= createInterface({ input: process.stdin, output: process.stdout });
     return this.rl.question(prompt);
   }
@@ -166,7 +166,7 @@ export const CHEF_PERMISSIONS_RISK =
  * answer after the risk is explained, else (with --yes or no terminal) auto for a new
  * owner.json and nothing for an existing one, where a missing value already means auto.
  */
-async function chooseChefPermissions(data: string, args: SetupArgs, ask: Asker, newOwner: boolean,
+export async function chooseChefPermissions(data: string, args: SetupArgs, ask: Asker, newOwner: boolean,
   say: (s: string) => void): Promise<void> {
   const file = path.join(data, "owner.json");
   const ownerData = loads(readText(file)) as Dict;
@@ -202,6 +202,13 @@ function linkBin(binDir: string, say: (s: string) => void): void {
     if (isSymlink(link)) {
       const current = pathStr(fs.readlinkSync(link));
       if (current === target) continue;
+      if (!exists(link)) {
+        // A link to nothing (a core that moved, say) is no one's tool: replace it.
+        fs.unlinkSync(link);
+        fs.symlinkSync(target, link);
+        say(`replaced ${link}, which pointed to ${current}, which no longer exists, with a link to ${target}`);
+        continue;
+      }
       say(`left ${link} alone: it points to ${current}, not this sous chef. To use this one from any ` +
         `terminal, replace it (ln -sfn ${target} ${link}), or run ${target} by its path`);
       continue;

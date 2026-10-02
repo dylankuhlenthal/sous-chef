@@ -7,6 +7,7 @@ import * as events from "./events.js";
 import * as inbox from "./inbox.js";
 import * as kinds from "./kinds.js";
 import { run } from "./proc.js";
+import { JSONDecodeError } from "./pyjson.js";
 import { Dict, expanduser, isDir, isUnder, readText, resolvePath, shellQuote, sorted, strip, truthy } from "./py.js";
 import * as records from "./records.js";
 import { Rec } from "./records.js";
@@ -31,27 +32,29 @@ export interface OwnerChange {
  * Write owner.json (util.owner), changing only the fields given. Without a usable owner.json
  * it needs both the name and the branch prefix. Refuses a name that would read as another
  * waiting-on value, and a permission mode sous chef's own session cannot have. A file
- * without chef_permissions keeps none unless one is given (none means the default).
+ * without a usable chef_permissions keeps none unless one is given (none means the default).
  */
 export function setOwner(change: OwnerChange): Owner | null {
-  let current: Owner | null;
+  // The fields already stored that are still usable, even when another field is not, so one
+  // bad field can be fixed on its own.
+  let stored: Dict = {};
   try {
-    current = owner();
+    const data = readJson<unknown>(ownerPath());
+    if (data && typeof data === "object" && !Array.isArray(data)) stored = data as Dict;
   } catch (e) {
-    if (!(e instanceof SCError)) throw e;
-    current = null;
+    if (!(e instanceof JSONDecodeError)) throw e;
   }
+  const usable = ownerProblem(stored.name, stored.branch_prefix) === null;
   const given = (v: string | null | undefined): v is string => v !== null && v !== undefined;
-  if (!current && !(given(change.name) && given(change.branchPrefix))) throw new SCError(OWNER_SET_USAGE);
-  const name = strip(given(change.name) ? change.name : current!.name);
-  const branchPrefix = given(change.branchPrefix) ? change.branchPrefix : current!.branch_prefix;
+  if (!usable && !(given(change.name) && given(change.branchPrefix))) throw new SCError(OWNER_SET_USAGE);
+  const name = strip(given(change.name) ? change.name : (stored.name as string));
+  const branchPrefix = given(change.branchPrefix) ? change.branchPrefix : (stored.branch_prefix as string);
   const problem = ownerProblem(name, branchPrefix) ??
     (given(change.chefPermissions) ? chefPermissionsProblem(change.chefPermissions) : null);
   if (problem) throw new SCError(problem);
   const data: Dict = { name, branch_prefix: branchPrefix };
-  const stored = current ? (readJson<Dict>(ownerPath()) ?? {}).chef_permissions : undefined;
   if (given(change.chefPermissions)) data.chef_permissions = change.chefPermissions;
-  else if (stored !== undefined && stored !== null) data.chef_permissions = stored;
+  else if (chefPermissionsProblem(stored.chef_permissions) === null) data.chef_permissions = stored.chef_permissions;
   writeJson(ownerPath(), data);
   return owner();
 }

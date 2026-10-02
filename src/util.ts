@@ -121,6 +121,8 @@ export interface Owner {
   lower: string;
   branch_prefix: string;
   chef_permissions: ChefPermissions;
+  /** False when owner.json has no chef_permissions, so chef_permissions is the default. */
+  chef_permissions_chosen: boolean;
 }
 
 /** Why this cannot be sous chef's own permission mode, or null. */
@@ -172,12 +174,13 @@ export function owner(): Owner | null {
   if (name === undefined || name === null || prefix === undefined || prefix === null) {
     throw new SCError(`${p} needs a name and a branch_prefix; rewrite it with \`sc owner set\``);
   }
-  const chefPermissions = (data as Record<string, unknown>).chef_permissions ?? DEFAULT_CHEF_PERMISSIONS;
+  const stored = (data as Record<string, unknown>).chef_permissions;
+  const chefPermissions = stored ?? DEFAULT_CHEF_PERMISSIONS;
   const problem = ownerProblem(name, prefix) ?? chefPermissionsProblem(chefPermissions);
   if (problem) throw new SCError(`${p} cannot be used: ${problem}; rewrite it with \`sc owner set\``);
   const n = strip(name as string);
   return { name: n, lower: n.toLowerCase(), branch_prefix: prefix as string,
-    chef_permissions: chefPermissions as ChefPermissions };
+    chef_permissions: chefPermissions as ChefPermissions, chef_permissions_chosen: stored !== undefined && stored !== null };
 }
 
 /** The owner, or a refusal saying how to set one. For commands that cannot run without one. */

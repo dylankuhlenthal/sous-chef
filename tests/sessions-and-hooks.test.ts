@@ -465,7 +465,7 @@ describe("SouschefTests", () => {
 
   it("with nothing registered a new sous chef is started in auto mode when the owner chose none", async () => {
     const out = (await souschef()).stdout;
-    expect(out).toBe("started sous chef (chef-1) with permissions: auto\nfake attach chef-1\n");
+    expect(out).toBe("started sous chef (chef-1) with permissions: auto\n(the default: you have not chosen sous chef's own permission mode; sc owner set --chef-permissions auto|bypass chooses it)\nfake attach chef-1\n");
     const row = started()["fake-chef-1"];
     expect([row.name, row.permissions, row.cwd]).toEqual(["sous-chef", "auto", ROOT]);
   });
@@ -518,7 +518,7 @@ describe("SouschefTests", () => {
     fakeRows({ "chef-1": { alive: false, kind: "background", id: "abcd1234" } });
     const out = (await souschef([], { env: { SC_FAKE_RESUME_FAILS: "1" } })).stdout;
     expect(out).toBe("could not resume the previous sous chef session; starting a new one\n" +
-      "started sous chef (chef-1) with permissions: auto\nfake attach chef-1\n");
+      "started sous chef (chef-1) with permissions: auto\n(the default: you have not chosen sous chef's own permission mode; sc owner set --chef-permissions auto|bypass chooses it)\nfake attach chef-1\n");
     expect(Object.keys(started())).toEqual(["fake-chef-1"]);
   });
 
@@ -527,7 +527,7 @@ describe("SouschefTests", () => {
     fakeRows({ "chef-1": { alive: true, pid: 1, kind: "background", id: "abcd1234" } });
     const out = (await souschef(["--new"])).stdout;
     expect(out).toBe("stopped the previous sous chef (abcd1234); its conversation is kept\n" +
-      "started sous chef (chef-1) with permissions: auto\nfake attach chef-1\n");
+      "started sous chef (chef-1) with permissions: auto\n(the default: you have not chosen sous chef's own permission mode; sc owner set --chef-permissions auto|bypass chooses it)\nfake attach chef-1\n");
     const old = t.fakeState().sessions["chef-1"];
     expect(old.alive).toBe(false);
     expect(Object.keys(old)).not.toContain("pid");

@@ -165,11 +165,22 @@ describe("SetupTests", () => {
 
   it("an sc or souschef link to something else is left alone", async () => {
     fs.mkdirSync(bin, { recursive: true });
-    fs.symlinkSync("/somewhere/else/sc", path.join(bin, "sc"));
+    const other = path.join(t.tmp, "other-tool", "sc");
+    fs.mkdirSync(path.dirname(other));
+    fs.writeFileSync(other, "#!/bin/sh\n", { mode: 0o755 });
+    fs.symlinkSync(other, path.join(bin, "sc"));
     const out = (await install(["--name", "Sam", "--no-git"])).stdout;
-    expect(out).toContain(`left ${path.join(bin, "sc")} alone: it points to /somewhere/else/sc, not this sous chef`);
-    expect(fs.readlinkSync(path.join(bin, "sc"))).toBe("/somewhere/else/sc");
+    expect(out).toContain(`left ${path.join(bin, "sc")} alone: it points to ${other}, not this sous chef`);
+    expect(fs.readlinkSync(path.join(bin, "sc"))).toBe(other);
     expect(fs.readlinkSync(path.join(bin, "souschef"))).toBe(path.join(fs.realpathSync(t.code), "bin", "souschef"));
+  });
+
+  it("an sc link to something that no longer exists is replaced", async () => {
+    fs.mkdirSync(bin, { recursive: true });
+    fs.symlinkSync(path.join(t.tmp, "moved", "bin", "sc"), path.join(bin, "sc"));
+    const out = (await install(["--name", "Sam", "--no-git"])).stdout;
+    expect(out).toContain(`replaced ${path.join(bin, "sc")}`);
+    expect(fs.readlinkSync(path.join(bin, "sc"))).toBe(path.join(fs.realpathSync(t.code), "bin", "sc"));
   });
 
   it("a data folder cloned from a repo keeps its owner", async () => {

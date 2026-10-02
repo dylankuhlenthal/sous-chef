@@ -129,6 +129,10 @@ export async function main(argv: string[]): Promise<number> {
       const mode = permissions();
       detail = await rt.startNamed(SESSION_NAME, firstPrompt(), CODE_ROOT, env(), mode);
       print(`started sous chef (${detail as string}) with permissions: ${mode}`);
+      if (owner()?.chef_permissions_chosen === false) {
+        print("(the default: you have not chosen sous chef's own permission mode; " +
+          "sc owner set --chef-permissions auto|bypass chooses it)");
+      }
     }
 
     if (args.print_only) {

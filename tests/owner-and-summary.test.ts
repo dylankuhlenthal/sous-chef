@@ -117,6 +117,9 @@ describe("OwnerTests", () => {
     expect(readJson(ownerFile())).toEqual({ name: "Alex", branch_prefix: "alx/" });
     fs.writeFileSync(ownerFile(), JSON.stringify({ name: "Alex", branch_prefix: "alx/", chef_permissions: "ask" }));
     expect((await t.sc(["owner"], { ok: false })).stderr).toContain("must be one of auto, bypass");
+    // The bad field can be fixed on its own; the name and prefix are kept.
+    await t.sc(["owner", "set", "--chef-permissions", "auto"]);
+    expect(readJson(ownerFile())).toEqual({ name: "Alex", branch_prefix: "alx/", chef_permissions: "auto" });
   });
 
   it("set writes owner json and the summary opens with it", async () => {
