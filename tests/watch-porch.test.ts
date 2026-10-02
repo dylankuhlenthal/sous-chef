@@ -17,6 +17,7 @@ import { main as cli } from "../src/cli.js";
 import * as events from "../src/events.js";
 import * as ops from "../src/ops.js";
 import * as records from "../src/records.js";
+import * as runtimes from "../src/runtimes/index.js";
 import { now, writeJson } from "../src/util.js";
 import { cycle } from "../src/watch.js";
 import { installStub, type Stub } from "./claude-stub.js";
@@ -181,5 +182,49 @@ describe("sc report on Porch", () => {
     expect(err).toHaveLength(1);
     expect(err[0]).toMatch(/^porch status not updated: this process looks like it runs in more than one session/);
     expect(await store.read("claude", SID)).toBeNull();
+  });
+});
+
+// Only src/runtimes/ knows how a session runs: the words naming Porch come from the Claude
+// runtime, so another runtime's stopped sessions and failed reports say what that runtime says.
+describe("words that come from the runtime, not the watcher or sc report", () => {
+  const fakeRt = runtimes.get("fake");
+  async function fakeSession() {
+    const rec = { id: "general-y-5678", kind: "general", title: "y", cwd: tmp, runtime: "fake",
+      handle_name: "sc-general-y", handle: { short_id: "y5678", session_id: "other-tool-session" } } as records.Rec;
+    records.save(rec);
+    await events.append(rec.id, "sc", "launched", "launched");
+  }
+
+  it("names the runtime's own source in the gone event", async () => {
+    await fakeSession();
+    const spy = vi.spyOn(fakeRt, "status").mockResolvedValue({ alive: false, busy: null, pid: null, prompt: null,
+      activity: null, stopped: { source: "Other tool", status: "exited", reason: "crashed" } });
+    try {
+      await cycle();
+    } finally {
+      spy.mockRestore();
+    }
+    const gone = events.readAll("general-y-5678").find((e) => e.state === "gone")!;
+    expect(gone.text).toContain("did not stop it. Other tool reports it as exited (crashed). Check");
+    expect(gone.text).not.toContain("Porch");
+  });
+
+  it("prints a failed reportStatus in the runtime's own words", async () => {
+    await fakeSession();
+    fakeRt.reportStatus = async () => {
+      throw new Error("other tool status not updated: it refused");
+    };
+    process.env.CLAUDE_CODE_SESSION_ID = "other-tool-session";
+    const err: string[] = [];
+    const spy = vi.spyOn(process.stderr, "write").mockImplementation((chunk) => (err.push(String(chunk)), true));
+    try {
+      expect((await ops.report("working", "busy with it")).state).toBe("working");
+    } finally {
+      spy.mockRestore();
+      delete fakeRt.reportStatus;
+      delete process.env.CLAUDE_CODE_SESSION_ID;
+    }
+    expect(err).toEqual(["other tool status not updated: it refused\n"]);
   });
 });

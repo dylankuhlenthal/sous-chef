@@ -134,8 +134,11 @@ function activityOf(value: unknown): Activity | null {
     in_flight: typeof a.inFlight === "number" ? a.inFlight : null, running };
 }
 
+/** Who the watcher's `gone` event says reported a stopped session (Status.stopped.source). */
+const SOURCE = "Porch";
+
 const NOT_FOUND: Status = { alive: false, busy: null, pid: null, prompt: null, activity: null,
-  stopped: { status: "not found", reason: null } };
+  stopped: { source: SOURCE, status: "not found", reason: null } };
 
 /**
  * A Porch observation as sous chef's Status (null: Porch does not know the session).
@@ -152,7 +155,7 @@ export function statusOf(obs: Observation | null | undefined): Status {
     ? { last_prompt_at: seconds(detail.lastTurnStart), last_stop_at: seconds(detail.lastTurnEnd) } : undefined;
   if (notRunning(obs.status)) {
     return { alive: false, busy: null, pid: null, prompt: null, activity: null, ...(turns ? { turns } : {}),
-      stopped: { status: obs.status, reason: obs.endReason } };
+      stopped: { source: SOURCE, status: obs.status, reason: obs.endReason } };
   }
   let prompt: string | null = null;
   if (obs.status === "waiting-on-prompt") {
@@ -419,7 +422,11 @@ export function createClaudeRuntime(options: ClaudeRuntimeOptions = {}): Runtime
     async reportStatus(_rec, state, text) {
       const mapped = Object.hasOwn(SELF_STATUS, state) ? SELF_STATUS[state] : null;
       if (!mapped) return;
-      await porch().statusSet(mapped, text);
+      try {
+        await porch().statusSet(mapped, text);
+      } catch (e) {
+        throw new Error(`porch status not updated: ${message(e)}`);
+      }
     },
 
     async startNamed(name, prompt, cwd, env, permissions) {

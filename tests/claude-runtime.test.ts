@@ -195,7 +195,7 @@ describe("on Porch's Claude adapter, with canned listings", () => {
   it("reads a session Porch does not know as not running, not found", async () => {
     const rt = setup([]);
     expect(await rt.status(rec)).toEqual({ alive: false, busy: null, pid: null, prompt: null, activity: null,
-      stopped: { status: "not found", reason: null } });
+      stopped: { source: "Porch", status: "not found", reason: null } });
     expect(await rt.statusSessionId(SID, await rt.listing())).toMatchObject({ alive: false });
   });
 
@@ -346,7 +346,7 @@ describe("on Porch's Claude adapter, with canned listings", () => {
       await store.updateInside("claude", SID, { status: "ended", endedAt: T2, endReason: reason });
       const st = await setup([row({ pid: null })]).status(rec);
       expect(st).toEqual({ alive: false, busy: null, pid: null, prompt: null, activity: null,
-        turns: { last_prompt_at: null, last_stop_at: null }, stopped: { status: "ended", reason } });
+        turns: { last_prompt_at: null, last_stop_at: null }, stopped: { source: "Porch", status: "ended", reason } });
       fs.rmSync(store.recordPath("claude", SID));
     }
   });

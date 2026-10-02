@@ -296,12 +296,13 @@ export async function report(state: string, text: string, key: string | null = n
   }
   // Best effort: a runtime that keeps a status of its own (the Claude runtime: Porch's self
   // status) is told too. The event above is the record; this never changes the outcome.
+  // A failure's message is the runtime's own line.
   const rt = runtimes.get(rec.runtime);
   if (rt.reportStatus) {
     try {
       await rt.reportStatus(rec, state, text);
     } catch (e) {
-      printErr(`porch status not updated: ${e instanceof Error ? e.message : String(e)}`);
+      printErr(e instanceof Error ? e.message : String(e));
     }
   }
   return event;
