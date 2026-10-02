@@ -116,7 +116,7 @@ describe("the watcher on Porch", () => {
 
 // Turn times: a session launched through Porch has them in Porch's record and no
 // turns.json; one launched before has only turns.json. The watcher and `sc status` use
-// the runtime's when it has them (decision 10 of the TypeScript rewrite).
+// the runtime's when it has them, so sessions launched before the switch-over keep working.
 describe("turn times on Porch", () => {
   const iso = (secondsAgo: number) => new Date((now() - secondsAgo) * 1000).toISOString();
 

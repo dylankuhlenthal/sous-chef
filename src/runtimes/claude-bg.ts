@@ -68,8 +68,9 @@ export function permissionMode(rec: Dict): string {
 }
 
 // The hook commands Porch's own hooks replace for a session launched through Porch: they
-// record turn times in turns.json, which Porch's record now holds (decision 10 of the
-// rewrite). The commands stay in sc for sessions launched before the switch-over.
+// record turn times in turns.json, which Porch's record now holds. The commands stay in sc
+// for sessions launched before the switch-over: Claude Code keeps a session's launch
+// settings across resume, so such a session calls them for the rest of its life.
 const OLD_TURN_HOOKS = [" hook worker-prompt ", " hook worker-stop "];
 
 /** `settings` without the UserPromptSubmit and Stop entries that run `sc hook worker-prompt`/`worker-stop`. */

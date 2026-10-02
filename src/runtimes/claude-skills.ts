@@ -2,7 +2,7 @@
 // Claude Code has no command that lists them; docs/domains/sessions.md ("Where Claude Code
 // reads skills from") says which parts were checked against Claude Code and how.
 //
-// This stays in sous chef whatever runs the sessions (TRV-1143 finding 9): `sc spawn`
+// This stays in sous chef whatever runs the sessions (Porch does not look up skills): `sc spawn`
 // and `sc kinds` use it through the Claude runtime's skillAvailable and skillPlaces.
 
 import fs from "node:fs";

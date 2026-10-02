@@ -47,4 +47,4 @@ with open(SC, "rb") as _f:
     IS_PYTHON = b"python" in _f.readline()
 
 python_only = unittest.skipUnless(
-    IS_PYTHON, "Python-only: tests the Python sc's internals, which retire with that code (TRV-1143 decision 5)")
+    IS_PYTHON, "Python-only: tests the Python sc's internals, which retire with that code (decision 0021, the TypeScript rewrite built in five serial steps)")

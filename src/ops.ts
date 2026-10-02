@@ -30,8 +30,10 @@ export function setOwner(name: string, branchPrefix: string): Owner | null {
   return owner();
 }
 
-// Hook commands run Node by its absolute path, then sc by its absolute path (decision 12):
-// a hook may not get the terminal's PATH, and Node here usually comes from nvm or Homebrew.
+// Hook commands run Node by its absolute path, then sc by its absolute path: a hook may not
+// get the terminal's PATH, and Node here usually comes from nvm or Homebrew. The hooks that
+// still find Node through PATH: docs/operations/running.md, "Known limit: hooks find Node
+// through PATH".
 function hook(name: string, sid: string): Dict {
   const cmd = `${shellQuote(process.execPath)} ${shellQuote(scBin())} hook ${name} --session ${shellQuote(sid)}`;
   return { hooks: [{ type: "command", command: cmd, timeout: 30 }] };
