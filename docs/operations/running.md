@@ -36,7 +36,7 @@ Sessions do not need `sc` on `PATH`: their brief gives its full path.
 
 - no `dist/`, or no `dist/.build-stamp` (the last step of a build, so a build that did not finish has none): `run: cd <core> && npm ci && npm run build`;
 - a file under `src/`, or `tsconfig.json` or `tsconfig.build.json`, newer than the build and with different content from what the build recorded in the stamp: `run: cd <core> && npm run build`;
-- `node_modules/.package-lock.json` missing, or older than a changed `package-lock.json`: `run: cd <core> && npm ci && npm run build`.
+- `node_modules/.package-lock.json` missing, or older than a changed `package-lock.json`: `run: cd <core> && npm ci && npm run build`. "Changed" means its content differs from what the build recorded. A build records the lock file's hash when the installed dependencies match it: when `node_modules/.package-lock.json` (npm's record of what is installed) is newer than it, or, when older, names the same packages with the same entries (`installedMatches` in `scripts/build-stamp.js`). So a checkout that rewrites `package-lock.json` with the same content, followed by a build, is not refused; one whose content really changed is, until `npm ci` runs (decision 0029, the build vouches for a lock file the installed dependencies match).
 
 At sous chef's startup hook the same text reaches sous chef as its startup context instead, so it can tell you. While the build is stale every other hook fails with the same text instead of running, including the one that blocks edits under `state/`, so those edits are not blocked. Why it works this way: decision 0023 (compiled into `dist/`, refused when stale).
 
