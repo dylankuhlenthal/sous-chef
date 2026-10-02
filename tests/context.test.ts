@@ -1,6 +1,6 @@
 // Behaviour tests for sous chef's context check, run against the real command line with the fake runtime.
 //
-// sous chef's Stop hook: how full its context is, read from its transcript (lib/sc/context.py).
+// sous chef's Stop hook: how full its context is, read from its transcript (src/context.ts).
 //
 // The fixtures copy the shape of real transcript lines: one JSON object per line,
 // assistant lines carrying message.usage.

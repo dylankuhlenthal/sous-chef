@@ -11,7 +11,7 @@ describe("CopyCodeTests", () => {
     try {
       const root = path.join(tmp, "root");
       const dest = path.join(tmp, "copy");
-      const files = ["bin/sc", "lib/sc/x.py", "lib/sc/__pycache__/x.pyc", "kinds/general.md", "kinds/mine.md",
+      const files = ["bin/sc", "kinds/general.md", "kinds/mine.md",
         "templates/t.md", "install.sh", "src/a.ts", "dist/a.js", "dist/sub/b.js", "package.json",
         "package-lock.json", "node_modules/pkg/index.js"];
       files.forEach((rel, n) => {
@@ -22,10 +22,9 @@ describe("CopyCodeTests", () => {
       });
       corePaths.copyCode(dest, root);
       corePaths.copyCode(dest, root); // copying again into the same folder works too
-      for (const rel of ["bin/sc", "lib/sc/x.py", "kinds/general.md", "templates/t.md", "install.sh"]) {
+      for (const rel of ["bin/sc", "kinds/general.md", "templates/t.md", "install.sh"]) {
         expect(fs.readFileSync(path.join(dest, rel), "utf8")).toBe(rel);
       }
-      expect(fs.existsSync(path.join(dest, "lib/sc/__pycache__"))).toBe(false);
       expect(fs.existsSync(path.join(dest, "kinds/mine.md"))).toBe(false);
       for (const rel of ["src/a.ts", "dist/a.js", "dist/sub/b.js", "package.json", "package-lock.json"]) {
         expect(fs.readFileSync(path.join(dest, rel), "utf8")).toBe(rel);

@@ -3,8 +3,8 @@
 // canned (an injected `io` for Porch's Claude adapter), Porch's fake adapter, or a stub
 // `claude` first on PATH (tests/claude-stub.ts).
 //
-// Several tests replace the Python-only ClaudeRuntimeParsingTests (tests/test_sc.py), which
-// retire with the Python code; each says which behaviour it carries over.
+// Several tests replace the Python sc's ClaudeRuntimeParsingTests, which retired with the
+// Python code; each says which behaviour it carries over.
 import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";

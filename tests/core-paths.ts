@@ -15,7 +15,7 @@ const ROOT = fs.realpathSync(path.resolve(import.meta.dirname, ".."));
 // Folders (ending in /) and single files. A path is core when it is one of the files
 // or sits under one of the folders.
 export const CORE_PATHS = [
-  "bin/", "lib/", "docs/", "tests/", "templates/", ".agents/",
+  "bin/", "docs/", "tests/", "templates/", ".agents/",
   "kinds/general.md", "kinds/investigate.md",
   "AGENTS.md", "CLAUDE.md", ".claude", ".gitignore", "README.md", "install.sh",
   "src/", "package.json", "package-lock.json", "tsconfig.json", "tsconfig.build.json", "eslint.config.js",
@@ -26,7 +26,7 @@ export const CORE_PATHS = [
 export const NOT_CORE = [".agents/settings.local.json"] as const;
 
 // What a running copy of the code needs: copied file by file, core files only.
-export const RUNTIME_PATHS = ["bin/", "lib/", "templates/", "kinds/", "install.sh"] as const;
+export const RUNTIME_PATHS = ["bin/", "templates/", "kinds/", "install.sh"] as const;
 // A built core's source and output: copied whole when present, not filtered by the path
 // list (dist/ is gitignored, so it is never on it), with modification times kept so a
 // launcher that compares dist/ with src/ sees the copy as built.
@@ -35,9 +35,7 @@ export const BUILD_PATHS = ["src/", "dist/", "package.json", "package-lock.json"
 export const LINKED_PATHS = ["node_modules"] as const;
 
 export function isCore(rel: string): boolean {
-  if ((NOT_CORE as readonly string[]).includes(rel) || rel.split("/").includes("__pycache__") || rel.endsWith(".pyc")) {
-    return false;
-  }
+  if ((NOT_CORE as readonly string[]).includes(rel)) return false;
   return CORE_PATHS.some((p) => (p.endsWith("/") ? rel.startsWith(p) : rel === p));
 }
 

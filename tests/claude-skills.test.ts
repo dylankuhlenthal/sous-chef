@@ -3,8 +3,7 @@
 // Each test builds the folders Claude Code reads skills from (a config folder standing in
 // for ~/.claude, a managed folder, a repo with a project folder inside) and asks whether a
 // skill is there. Nothing here runs Claude Code; docs/domains/sessions.md says what was
-// checked against Claude Code itself. Ported one for one from tests/test_claude_skills.py,
-// which tests the Python runtime and runs only when the sc under test is the Python one.
+// checked against Claude Code itself. Ported one for one from the Python sc's skill lookup tests.
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";

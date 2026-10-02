@@ -1,5 +1,3 @@
-__pycache__/
-*.pyc
 # The owner's data lives in their data folder, reached through the `my` link, and
 # never in the core. These are listed so none of it is committed here by mistake.
 /my
