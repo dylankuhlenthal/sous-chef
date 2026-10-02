@@ -8,14 +8,22 @@
 
 ## Install
 
-Clone the core to `~/.sous-chef`, then run its install script:
+Pipe the install script into a shell:
 
 ```sh
-git clone <the sous chef core repo> ~/.sous-chef
+curl -fsSL https://raw.githubusercontent.com/dylankuhlenthal/sous-chef/main/install.sh | bash
+```
+
+Or, to read the script before running it, clone the core to `~/.sous-chef` and run it from there:
+
+```sh
+git clone https://github.com/dylankuhlenthal/sous-chef.git ~/.sous-chef
 ~/.sous-chef/install.sh
 ```
 
-`install.sh` checks that `node`, `npm`, `git` and `claude` are on `PATH` (naming every missing one), that `node` is version 22 or later, and says which Node it found (`using Node v22.14.0 at <path>; hooks and the watcher run this Node`). It then brings the install up to date, doing only what is out of date. When `bin/sc --help` fails, it runs `npm ci` if `node_modules/.package-lock.json` is missing, if `bin/sc` says the dependencies are older than `package-lock.json`, or if the build is missing or did not finish and `package-lock.json` is newer than the installed dependencies (`bin/sc` can only compare the two once a build has finished), then `npm run build` if `bin/sc` still fails. It refuses to reinstall a `node_modules` that is a link to another install. Last, it runs `sc setup` (`src/setup.ts`), which asks:
+Piped, `install.sh` is not running from a core checkout, so it first clones the core's `main` into `~/.sous-chef` and runs that clone's own `install.sh`; everything below is then the same as the clone-first route. A folder already at `~/.sous-chef` that is a sous chef core is used as it is (it is not updated; see "The build, and updating after a pull"), and any other non-empty folder there is refused. `SOUS_CHEF_REPO` and `SOUS_CHEF_DIR` change where it clones from and to, for a fork. Flags go after `bash -s --`, for example `curl -fsSL <url> | bash -s -- --yes --name Sam`. Why: decision 0032 (install.sh also runs piped from the web).
+
+`install.sh` checks that `node`, `npm`, `git` and `claude` are on `PATH` (naming every missing one), that `node` is version 22 or later, and says which Node it found (`using Node v22.14.0 at <path>; hooks and the watcher run this Node`). It then brings the install up to date, doing only what is out of date. When `bin/sc --help` fails, it runs `npm ci` if `node_modules/.package-lock.json` is missing, if `bin/sc` says the dependencies are older than `package-lock.json`, or if the build is missing or did not finish and `package-lock.json` is newer than the installed dependencies (`bin/sc` can only compare the two once a build has finished), then `npm run build` if `bin/sc` still fails. It refuses to reinstall a `node_modules` that is a link to another install. Last, it runs `sc setup` (`src/setup.ts`), which asks the questions below. When the script came in on a pipe, its standard input is the script, so `sc setup` reads its answers from the terminal (`/dev/tty`) instead; with no terminal at all, the flags and defaults apply and nothing waits.
 
 | Question | What happens |
 | --- | --- |
