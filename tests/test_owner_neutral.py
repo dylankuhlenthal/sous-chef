@@ -28,7 +28,7 @@ SLACK_ID = re.compile(r"\bU[A-Z0-9]{8,}\b")
 SLACK_ID_SHA256 = "b57ff6249e9bddf5ad6321be7f364e8b994faabfe55abdd09b88ed6b35f789b3"
 EXCLUDED_DIRS = ("docs/decisions/",)
 # This file, which has to name what it searches for.
-EXCLUDED_FILES = ("tests/test_owner_neutral.py",)
+EXCLUDED_FILES = ("tests/test_owner_neutral.py", "tests/owner-neutral.test.ts")
 # Stored values from before the owner was a setting, which the code must still read.
 # Each is one named constant, so the old value appears exactly once.
 ALLOWED = {
@@ -38,6 +38,8 @@ ALLOWED = {
     ("src/slack.ts", 'export const LEGACY_FROM_OWNER = "from_dylan";'),
     ("tests/stored_values.py", 'LEGACY_OWNER = "dylan"'),
     ("tests/stored_values.py", 'LEGACY_FROM_OWNER = "from_dylan"'),
+    ("tests/stored-values.ts", 'export const LEGACY_OWNER = "dylan";'),
+    ("tests/stored-values.ts", 'export const LEGACY_FROM_OWNER = "from_dylan";'),
 }
 # The pinned Porch dependency (docs/decisions/0025): its package name and GitHub source
 # carry its author's account, which is not the core naming its owner. The package name is
