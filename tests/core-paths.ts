@@ -50,10 +50,13 @@ function isFileOrLink(file: string): boolean {
   }
 }
 
+/** git could not list the files (for example, root is not a git checkout). */
+export class GitListError extends Error {}
+
 /** Every file git tracks or would track (untracked but not ignored) under root. */
 export function listedFiles(root: string = ROOT): string[] {
   const out = spawnSync("git", ["-C", root, "ls-files", "--cached", "--others", "--exclude-standard"], { encoding: "utf8" });
-  if (out.status !== 0) throw new Error(`git could not list the files in ${root}: ${(out.stderr ?? "").trim()}`);
+  if (out.status !== 0) throw new GitListError(`git could not list the files in ${root}: ${(out.stderr ?? "").trim()}`);
   return out.stdout.split("\n").filter((f) => f !== "" && isFileOrLink(path.join(root, f)));
 }
 

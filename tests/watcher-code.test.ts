@@ -4,7 +4,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { check, read, RunningWatcherTest } from "./helpers.js";
+import { check, field, read, RunningWatcherTest } from "./helpers.js";
 
 let t: RunningWatcherTest;
 
@@ -20,7 +20,7 @@ describe("WatcherCodeTests", () => {
 
   it("a watcher restarts itself on new code between cycles", async () => {
     expect((await t.copySc(["watch", "--ensure"])).stdout).toContain("watcher running");
-    const before = t.codeRecord().code;
+    const before = field(t.codeRecord(), "code");
     const old = t.pid();
     changeCode();
     expect(await t.waitFor(() => ![undefined, null, before].includes(t.codeRecord().code)),
@@ -29,7 +29,7 @@ describe("WatcherCodeTests", () => {
     // place (same pid, as the Python sc did) or started a new process and exited (as the TypeScript
     // sc does: docs/domains/watcher.md, "The watcher restarts itself").
     const pid = t.pid();
-    expect(t.codeRecord().pid).toEqual(pid);
+    expect(field(t.codeRecord(), "pid")).toEqual(pid);
     expect(t.alive(pid)).toBe(true);
     expect(await t.waitFor(() => old === pid || !t.alive(old))).toBe(true);
     expect(read(path.join(t.state, "watch.log"))).toContain("restarting on the new code");
@@ -38,7 +38,7 @@ describe("WatcherCodeTests", () => {
 
   it("new code that does not load is refused and the old code keeps running", async () => {
     await t.copySc(["watch", "--ensure"]);
-    const before = t.codeRecord().code;
+    const before = field(t.codeRecord(), "code");
     changeCode();
     const sc = path.join(t.code, "bin", "sc");
     fs.writeFileSync(sc, "def broken(:\n"); // fails in Python, Node and sh alike
@@ -46,7 +46,7 @@ describe("WatcherCodeTests", () => {
     expect(await t.waitFor(() => read(path.join(t.state, "watch.log")).includes("does not load"))).toBe(true);
     const beat = read(path.join(t.state, "watch.beat"));
     expect(await t.waitFor(() => read(path.join(t.state, "watch.beat")) !== beat)).toBe(true);
-    expect(t.codeRecord().code).toEqual(before);
+    expect(field(t.codeRecord(), "code")).toEqual(before);
   });
 
   it("ensure replaces a watcher that cannot vouch for its code", async () => {
@@ -60,7 +60,7 @@ describe("WatcherCodeTests", () => {
     expect(t.pid()).not.toEqual(old);
     expect(await t.waitFor(() => !t.alive(old))).toBe(true);
     expect(read(path.join(t.state, "watch.log"))).toContain("watcher stopped between cycles");
-    expect(t.codeRecord().pid).toEqual(t.pid());
+    expect(field(t.codeRecord(), "pid")).toEqual(t.pid());
   });
 
   it("cron list says when the watcher or sous chef cannot fire jobs", async () => {

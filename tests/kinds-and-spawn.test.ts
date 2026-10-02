@@ -249,7 +249,8 @@ describe("KindSkillTests", () => {
 
   it("a kind without a skill is not checked", async () => {
     await t.spawn();
-    expect(t.fakeState().skill_checks ?? []).toEqual([]);
+    const state = t.fakeState();
+    expect(Object.hasOwn(state, "skill_checks") ? state.skill_checks : []).toEqual([]);
   });
 
   it("a skill value with a slash or space is refused", async () => {

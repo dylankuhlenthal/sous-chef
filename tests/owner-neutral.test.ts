@@ -85,8 +85,9 @@ function coreFiles(): string[] | null {
   let files: string[];
   try {
     files = corePaths.coreFiles(ROOT);
-  } catch {
-    return null;
+  } catch (e) {
+    if (e instanceof corePaths.GitListError) return null;
+    throw e;
   }
   return files.filter((f) => !EXCLUDED_DIRS.some((d) => f.startsWith(d)) && !EXCLUDED_FILES.includes(f)
     && isFile(path.join(ROOT, f)));

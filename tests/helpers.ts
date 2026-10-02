@@ -96,9 +96,17 @@ export function readJson<T = any>(file: string): T { // eslint-disable-line @typ
   return JSON.parse(fs.readFileSync(file, "utf8")) as T;
 }
 
-/** Each line of a JSON-lines file, parsed. */
+/** Each line of a JSON-lines file, parsed. A blank line fails, as json.loads("") did. */
 export function readJsonl(file: string): any[] { // eslint-disable-line @typescript-eslint/no-explicit-any
-  return fs.readFileSync(file, "utf8").split("\n").filter((l) => l !== "").map((l) => JSON.parse(l));
+  const lines = fs.readFileSync(file, "utf8").split("\n");
+  if (lines[lines.length - 1] === "") lines.pop();
+  return lines.map((l) => JSON.parse(l));
+}
+
+/** obj[key], failing when the key is missing, as a Python dict subscript did (KeyError). */
+export function field(obj: Record<string, unknown>, key: string): any { // eslint-disable-line @typescript-eslint/no-explicit-any
+  if (!Object.hasOwn(obj, key)) throw new Error(`no ${JSON.stringify(key)} in ${JSON.stringify(obj)}`);
+  return obj[key];
 }
 
 export function write(file: string, text: string): void {
@@ -291,7 +299,9 @@ export class RunningWatcherTest extends ScTest {
   }
 
   pid(): number {
-    return parseInt(read(path.join(this.state, "watch.pid")), 10);
+    const text = read(path.join(this.state, "watch.pid")).trim();
+    if (!/^[+-]?\d+$/.test(text)) throw new Error(`watch.pid does not hold a number: ${JSON.stringify(text)}`);
+    return parseInt(text, 10);
   }
 }
 

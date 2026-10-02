@@ -87,7 +87,7 @@ describe("SlackSetupTests", () => {
     const out = await t.sc(["slack", "setup", "--url", relay.url + "/", "--key-file", keyFile(),
       "--user", ALEX]);
     expect(out.stdout).toContain("accepted the key");
-    expect(fs.statSync(envFile()).mode & 0o777).toBe(0o600);
+    expect(fs.statSync(envFile()).mode & 0o7777).toBe(0o600);
     const text = read(envFile());
     expect(text).toContain(`SC_RELAY_KEY=${KEY}\n`);
     expect(text).toContain(`SC_RELAY_URL=${relay.url}\n`);
