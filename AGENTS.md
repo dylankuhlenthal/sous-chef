@@ -181,6 +181,8 @@ Sous chef's own code, kinds, templates and docs are changed like any repo: small
 
 Spawn that work into a **worktree of this repo**, never into this folder, because you run live from here. A worktree has no `my` link, so it cannot reach your data or disturb it, and it carries `.claude/` with it so the session still gets these instructions and the `state/` edit guard. The session reports through the absolute `sc` path in its brief, which is this folder's, so its events reach you normally.
 
+A pull into this folder is not live until the update step after it has run (`docs/operations/running.md`, "The build, and updating after a pull"): `bin/sc` refuses a stale build and says so.
+
 Any session started in this folder or a worktree of it runs the `chef-start` hook. It will not take the sous chef role from you while you are running: it is told it is not sous chef and named the session that is. If you are ever wedged and the owner wants another session to take over, they run `sc chef --take` in it.
 
 ### What sessions can use
