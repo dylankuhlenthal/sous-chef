@@ -6,6 +6,7 @@
 // Several tests replace the Python-only ClaudeRuntimeParsingTests (tests/test_sc.py), which
 // retire with the Python code; each says which behaviour it carries over.
 import fs from "node:fs";
+import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import {
@@ -255,6 +256,74 @@ describe("on Porch's Claude adapter, with canned listings", () => {
     const rows = await rt.listing();
     expect(rows[SID]).toMatchObject({ alive: false });
     expect(await rt.status(rec, rows)).toMatchObject({ alive: true, busy: true, pid: 4242 });
+  });
+
+  // A socket this test owns, in its own folder: Porch delivers to the address a session's
+  // record names, so no wake-up here ever goes near Claude Code's real socket folders.
+  async function probe() {
+    const dir = fs.mkdtempSync("/tmp/sc-wake-");
+    const address = path.join(dir, "probe.sock");
+    const texts: string[] = [];
+    const server = net.createServer((conn) => {
+      let buf = "";
+      conn.on("data", (b) => (buf += String(b)));
+      conn.on("end", () => {
+        for (const line of buf.split("\n").filter(Boolean)) {
+          texts.push((JSON.parse(line) as { message: { content: string } }).message.content);
+        }
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(address, resolve));
+    const close = () => new Promise<void>((resolve) => server.close(() => resolve())).then(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const received = async (n: number) => {
+      for (let i = 0; i < 200 && texts.length < n; i++) await new Promise((r) => setTimeout(r, 10));
+      return texts;
+    };
+    return { address, received, close };
+  }
+  // No process has this pid (macOS pids stop at 99998), so nothing here can be a real session.
+  const NOPID = 99999;
+
+  it("wakes the session status reads: after /clear, the new session id running under the same short id", async () => {
+    const NEW = "22222222-2222-3333-4444-555555555555";
+    const store = new RecordStore(sessionsDir(env));
+    await store.updateInside("claude", SID, { pid: NOPID, status: "idle", data: { shortId: SHORT } });
+    await store.updateInside("claude", SID, { status: "ended", endedAt: T2, endReason: "clear" });
+    const p = await probe();
+    try {
+      await store.updateInside("claude", NEW, { pid: NOPID, status: "idle", delivery: { via: "socket", address: p.address } });
+      const rt = setup([row({ sessionId: NEW, pid: NOPID })]);
+      expect(await rt.status(rec)).toMatchObject({ alive: true, busy: false });
+      await rt.wake(rec, "sous chef: new message 1");
+      await rt.wake(rec, "sous chef: new message 2", await rt.listing());
+      expect(await p.received(2)).toEqual(["[from sous chef] sous chef: new message 1", "[from sous chef] sous chef: new message 2"]);
+    } finally {
+      await p.close();
+    }
+  });
+
+  it("wakes a running session by its session id, or by its short id alone, as before", async () => {
+    const store = new RecordStore(sessionsDir(env));
+    const p = await probe();
+    try {
+      await store.updateInside("claude", SID, { pid: NOPID, status: "idle", delivery: { via: "socket", address: p.address } });
+      const rt = setup([row({ pid: NOPID })]);
+      await rt.wake(rec, "one");
+      await rt.wake({ id: "general-x-1234", handle: { short_id: SHORT } }, "two");
+      await rt.wake(rec, "three", await rt.listing());
+      expect(await p.received(3)).toEqual(["[from sous chef] one", "[from sous chef] two", "[from sous chef] three"]);
+    } finally {
+      await p.close();
+    }
+  });
+
+  it("refuses to wake an ended session with nothing running under its short id, with Porch's reason, as before", async () => {
+    const store = new RecordStore(sessionsDir(env));
+    await store.updateInside("claude", SID, { pid: NOPID, status: "idle", data: { shortId: SHORT } });
+    await store.updateInside("claude", SID, { status: "ended", endedAt: T2, endReason: "idle" });
+    const rt = setup([]);
+    await expect(rt.wake(rec, "x")).rejects.toThrow(new WakeError("general-x-1234 is not running (the session has ended)"));
+    await expect(rt.wake(rec, "x", await rt.listing())).rejects.toThrow(new WakeError("general-x-1234 is not running (the session has ended)"));
   });
 
   it("keeps an ended session stopped when nothing runs under its short id", async () => {

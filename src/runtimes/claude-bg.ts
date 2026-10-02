@@ -238,6 +238,31 @@ export function createClaudeRuntime(options: ClaudeRuntimeOptions = {}): Runtime
   }
 
   /**
+   * The observation of the session a record names, for both `status` and `wake`, so the two
+   * always agree (null: Porch knows neither id).
+   *
+   * By session id first, then by short id when that session is not running. After `/clear`
+   * Claude Code goes on in the same process under a new session id, and Porch shows the old
+   * id as ended (reason `clear`) while the short id is still running, as the Python runtime
+   * read it. A stopped session with nothing running under its short id stays stopped.
+   */
+  async function resolve(rec: Dict, rows: Listing | null | undefined): Promise<Observation | null> {
+    const handle = or(rec.handle, {}) as Dict;
+    const sid = typeof handle.session_id === "string" && handle.session_id ? handle.session_id : null;
+    const short = typeof handle.short_id === "string" && handle.short_id ? handle.short_id : null;
+    const running = (obs: Observation | null) => obs !== null && !notRunning(obs.status);
+    if (rows) {
+      const bySid = lookup(rows, sid);
+      const byShort = lookup(rows, short);
+      return running(bySid) || !running(byShort) ? (bySid ?? byShort) : byShort;
+    }
+    const bySid = sid ? await observe(sid) : null;
+    if (running(bySid) || !short) return bySid;
+    const byShort = await observe(short);
+    return running(byShort) ? byShort : (bySid ?? byShort);
+  }
+
+  /**
    * Run Claude Code (`command` is the launch plan's for a launch). `shown` names the
    * command in a timeout message: a launch's arguments start with the whole settings JSON.
    */
@@ -299,24 +324,7 @@ export function createClaudeRuntime(options: ClaudeRuntimeOptions = {}): Runtime
     },
 
     async status(rec, rows) {
-      const handle = or(rec.handle, {}) as Dict;
-      // By session id first, then by short id when that session is not running. After
-      // `/clear` Claude Code goes on in the same process under a new session id, and Porch
-      // shows the old id as ended (reason `clear`) while the short id is still running, as
-      // the Python runtime read it. A stopped session with nothing running under its short
-      // id stays stopped.
-      const sid = typeof handle.session_id === "string" && handle.session_id ? handle.session_id : null;
-      const short = typeof handle.short_id === "string" && handle.short_id ? handle.short_id : null;
-      const running = (obs: Observation | null) => obs !== null && !notRunning(obs.status);
-      if (rows) {
-        const bySid = lookup(rows, sid);
-        const byShort = lookup(rows, short);
-        return statusOf(running(bySid) || !running(byShort) ? (bySid ?? byShort) : byShort);
-      }
-      const bySid = sid ? await observe(sid) : null;
-      if (running(bySid) || !short) return statusOf(bySid);
-      const byShort = await observe(short);
-      return statusOf(running(byShort) ? byShort : (bySid ?? byShort));
+      return statusOf(await resolve(rec, rows));
     },
 
     async launch(rec, prompt, env, settings) {
@@ -372,10 +380,23 @@ export function createClaudeRuntime(options: ClaudeRuntimeOptions = {}): Runtime
       throw new SCError(`${rec.id as string} is still running after two stop attempts`);
     },
 
-    async wake(rec, text) {
+    async wake(rec, text, rows) {
       const handle = or(rec.handle, {}) as Dict;
-      const id = or(handle.session_id, handle.short_id);
-      if (typeof id !== "string" || !id) throw new WakeError(`${rec.id as string} is not running (no runtime handle)`);
+      const recorded = or(handle.session_id, handle.short_id);
+      if (typeof recorded !== "string" || !recorded) {
+        throw new WakeError(`${rec.id as string} is not running (no runtime handle)`);
+      }
+      let id = recorded;
+      // Deliver to the session `status` resolves to: after `/clear` that is the new session
+      // id running under the same short id, not the recorded one, which Porch shows as ended.
+      // A session that is not running keeps the recorded id, so the reason Porch gives is unchanged.
+      let resolved: Observation | null;
+      try {
+        resolved = await resolve(rec, rows);
+      } catch (e) {
+        throw new WakeError(message(e));
+      }
+      if (resolved && !notRunning(resolved.status)) id = resolved.session;
       const failed = await deliver(id, text);
       if (failed === null) return;
       const [stopped, reason] = failed;
