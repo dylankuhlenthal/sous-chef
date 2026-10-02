@@ -1,5 +1,8 @@
 // The built sc whose reader stops early (`sc status <id> | head -1`): it stays quiet and
-// exits as it would have, as the Python sc did, instead of printing Node's EPIPE stack trace.
+// exits as it would have, instead of printing Node's EPIPE stack trace. This uses more output
+// than a pipe holds, where it differs from the Python sc on purpose (Python printed a
+// BrokenPipeError traceback and exited 1); for output that fits, Python was quiet with exit 0
+// too (src/io.ts, ignoreClosedOutput, says why).
 // Runs this checkout's bin/sc against a temporary data folder (SC_TEST_HOME) and the fake
 // runtime, so nothing real is touched. Needs a build: `npm run build` first (npm test does).
 import { spawn, spawnSync } from "node:child_process";
