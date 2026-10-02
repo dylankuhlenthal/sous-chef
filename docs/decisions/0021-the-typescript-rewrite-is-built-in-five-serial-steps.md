@@ -4,10 +4,10 @@
 **Status:** Accepted
 
 ## Context
-Sous chef was about 5,600 lines of Python and moves to TypeScript, with its Claude runtime moving onto Porch (TRV-1143). That is too much for one build to do and for one review to check well, and the live sous chef has to switch over in one go at the end. Each part has its own way to be checked: the behaviour suite, real Claude sessions, and a rehearsal of the switch-over.
+Sous chef was about 5,600 lines of Python and moves to TypeScript, with its Claude runtime moving onto Porch. That is too much for one build to do and for one review to check well, and the live sous chef has to switch over in one go at the end. Each part has its own way to be checked: the behaviour suite, real Claude sessions, and a rehearsal of the switch-over.
 
 ## Decision
-The rewrite is five sub-issues of TRV-1143, built in order by one serial orchestrate run: (1) the behaviour suite made language-neutral, so the same tests run against either sc; (2) the TypeScript sc at parity on the fake runtime, passing that suite; (3) the Claude runtime on Porch; (4) the switch-over of the live install; (5) the tests ported to TypeScript and the Python code removed. Steps 2 to 4 merge into an integration branch, and only the finished whole goes to `main`.
+The rewrite is five sub-issues of the TypeScript rewrite issue, built in order by one serial orchestrate run: (1) the behaviour suite made language-neutral, so the same tests run against either sc; (2) the TypeScript sc at parity on the fake runtime, passing that suite; (3) the Claude runtime on Porch; (4) the switch-over of the live install; (5) the tests ported to TypeScript and the Python code removed. Steps 2 to 4 merge into an integration branch, and only the finished whole goes to `main`.
 
 Step 2 is one pull request built in internal commits (tooling, foundations, commands, the launcher switch, docs), so the review is split without splitting the issue. `bin/sc` and `bin/souschef` switch to the Node launchers only in its last code commit, so every earlier commit still runs the Python sc and passes the suite.
 

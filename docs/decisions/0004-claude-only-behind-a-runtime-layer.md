@@ -4,7 +4,7 @@
 **Status:** Accepted
 
 ## Context
-Dylan wants to use other agent tools later, but only Claude Code now. Supporting several tools from the start (as firstmate does) multiplies the code that deals with each tool's quirks.
+The owner wants to use other agent tools later, but only Claude Code now. Supporting several tools from the start (as firstmate does) multiplies the code that deals with each tool's quirks.
 
 ## Decision
 Only Claude Code is supported. All knowledge of how a session runs lives in `lib/sc/runtimes/`, behind a small set of functions (`launch`, `resume`, `stop`, `status`, `listing`, `wake`, `wake_session_id`, `attach_command`). Each session record stores its runtime name.
