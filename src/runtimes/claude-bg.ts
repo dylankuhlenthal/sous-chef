@@ -390,21 +390,34 @@ export function createClaudeRuntime(options: ClaudeRuntimeOptions = {}): Runtime
       if (typeof recorded !== "string" || !recorded) {
         throw new WakeError(`${rec.id as string} is not running (no runtime handle)`);
       }
-      let id = recorded;
       // Deliver to the session `status` resolves to: after `/clear` that is the new session
       // id running under the same short id, not the recorded one, which Porch shows as ended.
-      // A session that is not running keeps the recorded id, so the reason Porch gives is unchanged.
-      let resolved: Observation | null;
-      try {
-        resolved = await resolve(rec, rows);
-      } catch (e) {
-        throw new WakeError(message(e));
+      // A session that is not running keeps the recorded id, so the reason Porch gives is
+      // unchanged. Porch's deliver reads `claude agents` twice on its own, so without the
+      // caller's rows the recorded id is tried first and a listing is read only when Porch
+      // says it is not running (rare: after `/clear`, or a session that really stopped).
+      const running = (obs: Observation | null) => (obs && !notRunning(obs.status) ? obs.session : null);
+      const lookUp = async (listing: Listing | null | undefined) => {
+        try {
+          return running(await resolve(rec, listing ?? await this.listing()));
+        } catch (e) {
+          throw new WakeError(message(e));
+        }
+      };
+      const fail = ([stopped, reason]: [boolean, string]) =>
+        new WakeError(stopped ? `${rec.id as string} is not running (${reason})` : reason);
+      if (rows) {
+        const failed = await deliver((await lookUp(rows)) ?? recorded, text);
+        if (failed !== null) throw fail(failed);
+        return;
       }
-      if (resolved && !notRunning(resolved.status)) id = resolved.session;
-      const failed = await deliver(id, text);
+      const failed = await deliver(recorded, text);
       if (failed === null) return;
-      const [stopped, reason] = failed;
-      throw new WakeError(stopped ? `${rec.id as string} is not running (${reason})` : reason);
+      if (!failed[0]) throw fail(failed);
+      const other = await lookUp(null);
+      if (other === null || other === recorded) throw fail(failed);
+      const again = await deliver(other, text);
+      if (again !== null) throw fail(again);
     },
 
     async statusSessionId(sessionId, rows) {

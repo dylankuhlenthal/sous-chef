@@ -131,10 +131,12 @@ function row(fields: Record<string, unknown> = {}) {
 }
 
 describe("on Porch's Claude adapter, with canned listings", () => {
-  function setup(rows: unknown[] | { code: number | null; stderr: string }, jobs: Record<string, unknown> = {}) {
+  function setup(rows: unknown[] | { code: number | null; stderr: string }, jobs: Record<string, unknown> = {},
+                 count = { agents: 0 }) {
     const io: HarnessIO = {
       async run(_cmd, args) {
         if (args[0] !== "agents") return { code: 1, stdout: "", stderr: "unexpected" };
+        count.agents++;
         if (!Array.isArray(rows)) return { code: rows.code, stdout: "", stderr: rows.stderr };
         return { code: 0, stdout: JSON.stringify(rows), stderr: "" };
       },
@@ -312,6 +314,46 @@ describe("on Porch's Claude adapter, with canned listings", () => {
       await rt.wake({ id: "general-x-1234", handle: { short_id: SHORT } }, "two");
       await rt.wake(rec, "three", await rt.listing());
       expect(await p.received(3)).toEqual(["[from sous chef] one", "[from sous chef] two", "[from sous chef] three"]);
+    } finally {
+      await p.close();
+    }
+  });
+
+  // Python's wake read the listing once. Porch's deliver reads `claude agents` twice on its
+  // own (once to find the harness, once in the Claude adapter), so that is the floor: a
+  // wake-up adds no listing of sous chef's, except after `/clear`, where the recorded id is
+  // refused first and the session is then looked up once and delivered to.
+  it("adds no claude agents listing of its own to a wake-up, except after /clear", async () => {
+    const NEW = "22222222-2222-3333-4444-555555555555";
+    const store = new RecordStore(sessionsDir(env));
+    const p = await probe();
+    try {
+      await store.updateInside("claude", SID, { pid: NOPID, status: "idle", delivery: { via: "socket", address: p.address } });
+      const count = { agents: 0 };
+      const rt = setup([row({ pid: NOPID })], {}, count);
+      await rt.wake(rec, "plain");
+      expect(count.agents).toBe(2);
+      count.agents = 0;
+      await rt.wake({ id: "general-x-1234", handle: { short_id: SHORT } }, "plain by short id");
+      expect(count.agents).toBe(2);
+      const rows = await rt.listing();
+      count.agents = 0;
+      await rt.wake(rec, "plain with rows", rows);
+      expect(count.agents).toBe(2);
+
+      // After /clear: the old id ended, the short id running under a new id.
+      await store.updateInside("claude", SID, { status: "ended", endedAt: T2, endReason: "clear", data: { shortId: SHORT } });
+      await store.updateInside("claude", NEW, { pid: NOPID, status: "idle", delivery: { via: "socket", address: p.address } });
+      const cleared = { agents: 0 };
+      const rt2 = setup([row({ sessionId: NEW, pid: NOPID })], {}, cleared);
+      await rt2.wake(rec, "after clear");
+      expect(cleared.agents).toBe(5); // refused (2), one lookup (1), delivered (2)
+      const clearedRows = await rt2.listing();
+      cleared.agents = 0;
+      await rt2.wake(rec, "after clear with rows", clearedRows);
+      expect(cleared.agents).toBe(2);
+      expect(await p.received(5)).toEqual(["[from sous chef] plain", "[from sous chef] plain by short id",
+        "[from sous chef] plain with rows", "[from sous chef] after clear", "[from sous chef] after clear with rows"]);
     } finally {
       await p.close();
     }
