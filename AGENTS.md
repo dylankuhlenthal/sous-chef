@@ -25,6 +25,7 @@ The core:
 - `bin/sc`, `src/`: the `sc` command. Run `sc --help`. `bin/sc` and `bin/souschef` (how the owner opens you from any terminal) are small launchers: they check Node and the build, then run the compiled code in `dist/` (gitignored), which `npm run build` makes from `src/`. They refuse a build that is missing or older than `src/`, with the command that fixes it. `package.json` lists the dependencies and scripts. `install.sh`: sets up an install (it brings the dependencies and the build up to date, then runs `sc setup`); piped from the web, it clones the core first.
 - `kinds/`: the core kinds, one file per session kind. `templates/worker-brief.md`: the instructions every session gets.
 - `docs/`: how sous chef works, filed by the documentation standards in `docs/patterns/documentation.md` (read it before changing docs). `tests/`: the test suite.
+- `README.md`, `LICENSE` (MIT), `SECURITY.md`, `CONTRIBUTING.md`: for people reading the public repo. `.github/`: the CI workflow and the branch ruleset on `main` (`docs/operations/going-public.md`).
 
 The data folder (`my/`):
 
@@ -194,7 +195,7 @@ Sessions launch in their kind's permission mode (`auto` for a kind that names no
 
 ## Testing
 
-`npm test` builds (`npm run build`), then runs the whole suite with vitest (`tests/*.test.ts`); `npm ci` once, and again whenever `package-lock.json` changes. The launchers refuse a missing or stale build, so the tests that run `sc` need the build `npm test` makes first. `npm run typecheck` and `npm run lint` check the code.
+`npm test` builds (`npm run build`), then runs the whole suite with vitest (`tests/*.test.ts`); `npm ci` once, and again whenever `package-lock.json` changes. The launchers refuse a missing or stale build, so the tests that run `sc` need the build `npm test` makes first. `npm run typecheck` and `npm run lint` check the code. CI (`.github/workflows/ci.yml`, the `tests` check `main` requires) runs all three on Linux for every pull request.
 
 The behaviour tests drive the real `sc` command (this checkout's `bin/sc` and `bin/souschef`, run as programs) against a temporary home with the `fake` runtime, so they start no Claude sessions, and check what it prints and writes. Their fixtures are in `tests/helpers.ts`: `ScTest` gives each test its own temporary home and work folder, owner Alex and a fake clock, and runs `sc` asynchronously, since the fake Slack relay (`tests/fake-relay.ts`) answers from the test process. The files are split by domain (`kinds-and-spawn`, `setup-and-data`, `events-and-messages`, `sessions-and-hooks`, `watcher`, `watcher-code`, `sync`, `cron`, `owner-and-summary`, `context`, `slack`), with one `describe` per group of tests named as the docs cite them (`WatcherTests`, `CronTests`). Files run in parallel; tests within a file one at a time. Behaviour that depends on Claude Code itself is verified by hand; see `docs/domains/sessions.md`.
 

@@ -62,8 +62,9 @@ it("stays quiet and exits 0 when its output pipe is closed after the first line"
   sc(["owner", "set", "--name", "Alex", "--branch-prefix", "alex/"]);
   sc(["spawn", "--kind", "general", "--title", "t", "--cwd", path.join(tmp, "work"), "--runtime", "fake"], "a task");
   const id = fs.readdirSync(path.join(tmp, "home", "state", "sessions"))[0]!;
-  // Far more output than a pipe holds, so sc is still writing when the reader leaves.
-  sc(["send", id, "x".repeat(400_000)]);
+  // Far more output than a pipe holds, so sc is still writing when the reader leaves. Four
+  // messages, because Linux refuses a single command-line argument over 128 KiB.
+  for (let i = 0; i < 4; i++) sc(["send", id, "x".repeat(100_000)]);
   const r = await firstLineThenClose(["inbox"], { CLAUDE_CODE_SESSION_ID: `fake-${id}` });
   expect(r.line).toMatch(/^--- message 1 from sous chef/);
   expect(r.stderr).toBe("");

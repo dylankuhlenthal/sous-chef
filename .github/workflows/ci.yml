@@ -1,0 +1,34 @@
+# Lint, type-check and the whole test suite on every PR (and on pushes to main).
+# The job name "tests" is the check the branch ruleset on main requires
+# (.github/rulesets/main.json); see docs/operations/going-public.md before renaming it.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      # Builds, then runs the whole suite with vitest. It needs no secrets and starts no Claude sessions.
+      - run: npm test
