@@ -45,6 +45,9 @@ const ALLOWED: [string, string][] = [
 // allowed wherever the code imports it; the GitHub source only in the two package files.
 // Only these exact forms, so any other mention still fails.
 const PORCH_PACKAGE = /@dylankuhlenthal\/porch\b/g;
+// The core's own GitHub repo (the clone URL and the install script's raw URL) carries the
+// same account; only that exact repo path is allowed, anywhere.
+const CORE_REPO = /\bdylankuhlenthal\/sous-chef\b/g;
 const PORCH_FILES = ["package.json", "package-lock.json"];
 const PORCH_SOURCE = /github:dylankuhlenthal\/porch#[\w.-]+|github\.com\/dylankuhlenthal\/porch\.git#[0-9a-f]{40}/g;
 
@@ -109,7 +112,7 @@ describe("OwnerNeutralTests", () => {
       const text = readText(path.join(ROOT, rel));
       if (text === null) continue;
       splitlines(text).forEach((line, i) => {
-        let checked = line.replace(PORCH_PACKAGE, "");
+        let checked = line.replace(PORCH_PACKAGE, "").replace(CORE_REPO, "");
         if (PORCH_FILES.includes(rel)) checked = checked.replace(PORCH_SOURCE, "");
         if (SEARCH.test(checked) && !allowed.has(JSON.stringify([rel, line.trim()]))) {
           found.push(`${rel}:${i + 1}: ${line.trim().slice(0, 120)}`);
