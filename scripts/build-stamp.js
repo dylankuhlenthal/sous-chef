@@ -9,6 +9,7 @@
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import process from "node:process";
 import { isDeepStrictEqual } from "node:util";
 import { fileURLToPath } from "node:url";
 
@@ -47,11 +48,23 @@ function mtime(p) {
   }
 }
 
+/** Whether a lock entry's `os` or `cpu` list (npm's form, `!` excluding) allows this machine. */
+function allows(list, value) {
+  if (!Array.isArray(list)) return true;
+  if (list.includes(`!${value}`)) return false;
+  const wanted = list.filter((v) => typeof v === "string" && !v.startsWith("!"));
+  return wanted.length === 0 || wanted.includes(value);
+}
+
 /**
  * Whether npm's record of the installed packages names exactly the packages the lock file
  * does. npm leaves out of its record the root package (`""`) and optional packages it did
  * not install (those for other platforms), so those may be missing; every other entry must
- * be there and identical. A file that cannot be read counts as no match.
+ * be there and identical. The root entry cannot be compared, since npm's record has none,
+ * so every dependency the root entry declares (of any kind) must be installed, except an
+ * optional one whose `os` or `cpu` excludes this machine: a pull that adds a dependency
+ * at the root, optional or not, is refused until npm ci. A file that cannot be read counts
+ * as no match.
  */
 function installedMatches(lockFile, installedFile) {
   let lock;
@@ -73,6 +86,20 @@ function installedMatches(lockFile, installedFile) {
   }
   for (const [key, entry] of Object.entries(want)) {
     if (key !== "" && !Object.hasOwn(have, key) && entry?.optional !== true) return false;
+  }
+  const root = want[""] ?? {};
+  for (const kind of ["dependencies", "devDependencies", "optionalDependencies", "peerDependencies"]) {
+    const deps = root[kind];
+    if (deps === undefined) continue;
+    if (typeof deps !== "object" || deps === null) return false;
+    for (const name of Object.keys(deps)) {
+      const key = `node_modules/${name}`;
+      if (Object.hasOwn(have, key)) continue;
+      const entry = want[key];
+      const otherPlatform = kind === "optionalDependencies" && entry !== undefined &&
+        !(allows(entry.os, process.platform) && allows(entry.cpu, process.arch));
+      if (!otherPlatform) return false;
+    }
   }
   return true;
 }
