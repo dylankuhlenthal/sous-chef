@@ -162,13 +162,13 @@ describe("SlackSendTests", () => {
   });
 
   it("updates about a session share one thread", async () => {
-    const sid = await t.spawn("general", "Moodle auth");
+    const sid = await t.spawn("general", "Billing export");
     const out = await t.sc(["slack", "send", "--session", sid, "started"]);
     expect(out.stdout).toContain(`a new update thread for ${sid}`);
     await t.sc(["slack", "send", "--session", sid.slice(0, 12), "PR is up"]);
     expect(relay.posts).toHaveLength(2);
     const [first, second] = relay.posts;
-    expect(first.text).toContain("*Moodle auth*");
+    expect(first.text).toContain("*Billing export*");
     expect(first.text).toContain(sid);
     expect(first).not.toHaveProperty("parent_id");
     expect(second.conversation_id).toBe(DM);
@@ -539,15 +539,15 @@ describe("StandingInstructionTests", () => {
   }
 
   it("a sessions thread file instruction shows under its events", async () => {
-    write("memory/threads/moodle-auth.md", "# Moodle auth\n\nnotes\n\n## Slack me\n\nWhen the orchestrate " +
+    write("memory/threads/billing-export.md", "# Billing export\n\nnotes\n\n## Slack me\n\nWhen the orchestrate " +
       "is ready for review, slack me the PR link.\n\n## 2026-09-22\n\nnot part of it\n");
     let out = await t.sc(["spawn", "--kind", "general", "--title", "Orchestrate", "--cwd", t.work,
-      "--runtime", "fake", "--thread", "moodle-auth"], { stdin: "do it" });
+      "--runtime", "fake", "--thread", "billing-export"], { stdin: "do it" });
     expect(out.stderr).not.toContain("no --thread");
     const sid = out.stdout.split(/\s+/).filter(Boolean)[1]!;
     await t.asSession(sid, ["report", "done", "PR #12 is ready"]);
     out = await t.sc(["events"]);
-    expect(out.stdout).toContain("Slack me (memory/threads/moodle-auth.md");
+    expect(out.stdout).toContain("Slack me (memory/threads/billing-export.md");
     expect(out.stdout).toContain("      | When the orchestrate is ready for review, slack me the PR link.");
     expect(out.stdout).not.toContain("not part of it");
   });
@@ -567,18 +567,18 @@ describe("StandingInstructionTests", () => {
   });
 
   it("a cron jobs memory file instruction shows under its workers done", async () => {
-    write("memory/inbox-triage.md", "# Inbox\n\n## Slack me\nAnything NB from a client domain: slack me.\n");
-    await t.sc(["cron", "add", "inbox-triage", "--at", "09:00", "--target", "worker", "--kind", "general",
-      "--cwd", t.work, "--runtime", "fake", "--memory", "memory/inbox-triage.md"], { stdin: "triage" });
-    expect(read(path.join(t.home, "cron", "inbox-triage.md"))).toContain("memory: memory/inbox-triage.md");
-    await t.sc(["cron", "run", "inbox-triage"]);
+    write("memory/daily-digest.md", "# Inbox\n\n## Slack me\nAnything urgent: slack me.\n");
+    await t.sc(["cron", "add", "daily-digest", "--at", "09:00", "--target", "worker", "--kind", "general",
+      "--cwd", t.work, "--runtime", "fake", "--memory", "memory/daily-digest.md"], { stdin: "triage" });
+    expect(read(path.join(t.home, "cron", "daily-digest.md"))).toContain("memory: memory/daily-digest.md");
+    await t.sc(["cron", "run", "daily-digest"]);
     const sessionLine = splitlines((await t.sc(["sessions"])).stdout).find((l) => l.startsWith("- "));
     if (sessionLine === undefined) throw new Error("StopIteration: no session line");
     const sid = sessionLine.split(/\s+/).filter(Boolean)[1]!;
     await t.asSession(sid, ["report", "done", "NB: client invoice overdue"]);
     const out = (await t.sc(["events"])).stdout;
-    expect(out).toContain("cron job inbox-triage");
-    expect(out).toContain("      | Anything NB from a client domain: slack me.");
+    expect(out).toContain("cron job daily-digest");
+    expect(out).toContain("      | Anything urgent: slack me.");
   });
 
   it("a chef jobs memory file instruction shows under its due event", async () => {

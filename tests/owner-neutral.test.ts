@@ -1,12 +1,14 @@
-// The core names nobody: no core file names the first owner.
+// The core names nobody: no core file names the first owner, their setup or their work.
 //
 // Sous chef's code, kinds, templates, docs and tests take the owner's name from owner.json
-// (decision 0018). This searches every file on the core's path list (core-paths.ts),
-// ignoring case, for the first owner's name, branch prefix and Slack id, so a new mention
-// fails the suite. The tests run as a neutral owner, Alex.
+// (decision 0018), and the core is public. This searches every file on the core's path list
+// (core-paths.ts), ignoring case, for the first owner's name, branch prefix and Slack id,
+// their private ticket ids, clients and tools, email addresses and home folder paths, so a
+// new mention fails the suite. The tests run as a neutral owner, Alex.
 //
 // Not searched, on purpose:
-//   docs/decisions/   records of who decided what, left as written (decision 0020)
+//   docs/decisions/   records of who decided what; scrubbed once, by hand, before the core
+//                     went public, and not edited again (decision 0030)
 //   this file         it has to name what it searches for (the Slack id only as a hash)
 import { spawnSync } from "node:child_process";
 import crypto from "node:crypto";
@@ -16,7 +18,13 @@ import { describe, expect, it } from "vitest";
 import * as corePaths from "./core-paths.js";
 import { ROOT } from "./helpers.js";
 
-const SEARCH = /dylan|dyl\//i;
+const SEARCH = new RegExp([
+  "dylan", "dyl/", "dylkuhl", // the first owner's name, branch prefix and email
+  "\\bTRV-\\d+", // their private tickets
+  "(?<!-)\\btraverse\\b", "thetraverse", "groundflr", "moodle", "studio-api", // their work and clients (not json-schema-traverse, a dependency)
+  "@gmail\\.com", // email addresses
+  "/Users/[A-Za-z]", "/home/[A-Za-z]", // home folder paths
+].join("|"), "i");
 // The first owner's Slack user id is an identifier, not a name, so it is not written
 // here: anything shaped like a Slack user id is compared by its SHA-256.
 const SLACK_ID = /\bU[A-Z0-9]{8,}\b/g;

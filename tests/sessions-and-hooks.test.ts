@@ -152,7 +152,7 @@ describe("ResumeAndReleaseTests", () => {
 });
 
 describe("ActivityListingTests", () => {
-  const RUNNING = [{ kind: "subagent", label: "Build TRV-1116 web types", since: 1_799_999_400.0 },
+  const RUNNING = [{ kind: "subagent", label: "Build ABC-102 web types", since: 1_799_999_400.0 },
     { kind: "subagent", label: "rr2 finder: bugs", since: 1_799_999_900.0 },
     { kind: "subagent", label: "rr2 finder: hostile", since: 1_799_999_900.0 },
     { kind: "shell", label: "npm run typecheck", since: 1_799_999_950.0 }];
@@ -161,21 +161,21 @@ describe("ActivityListingTests", () => {
   afterEach(() => t.cleanup());
 
   it("sessions shows what a session is doing on one extra line", async () => {
-    const sid = await t.spawn("general", "Orchestrate TRV-1114");
+    const sid = await t.spawn("general", "Orchestrate ABC-101");
     const other = await t.spawn("general", "Quiet one");
-    t.setFake(sid, { activity: { detail: "TRV-1116 building, awaiting builder report", in_flight: 4,
+    t.setFake(sid, { activity: { detail: "ABC-102 building, awaiting builder report", in_flight: 4,
       running: RUNNING } });
     const out = (await t.sc(["sessions"])).stdout;
     const lines = splitlines(out);
     const row = lines.findIndex((line) => line.includes(sid));
     expect(lines[row]).toContain("idle, 4 in flight");
     expect(lines[row + 1]).toBe(
-      "    doing: TRV-1116 building, awaiting builder report | " +
-      "subagents: Build TRV-1116 web types, rr2 finder: bugs, +1 more");
+      "    doing: ABC-102 building, awaiting builder report | " +
+      "subagents: Build ABC-102 web types, rr2 finder: bugs, +1 more");
     expect(out).not.toContain("npm run typecheck");
     expect(lines.length).toBe(3); // one line for the quiet session, two for the busy one
     expect(lines[2]).toContain(other);
-    expect((await t.sc(["summary"])).stdout).toContain("doing: TRV-1116");
+    expect((await t.sc(["summary"])).stdout).toContain("doing: ABC-102");
   });
 
   it("status lists everything in flight", async () => {
@@ -184,7 +184,7 @@ describe("ActivityListingTests", () => {
     const out = (await t.sc(["status", sid])).stdout;
     expect(out).toContain("doing: reviewing");
     expect(out).toContain("subagents and background commands in flight: 4");
-    expect(out).toContain("subagent: Build TRV-1116 web types, started 10m ago");
+    expect(out).toContain("subagent: Build ABC-102 web types, started 10m ago");
     expect(out).toContain("shell: npm run typecheck, started 50s ago");
   });
 
@@ -385,12 +385,12 @@ describe("WorktreeTests", () => {
 
   it("worktree created from origin with env linked and recorded", async () => {
     const root = makeRepo(t);
-    const out = await t.sc(["worktree", "--repo", root, "--branch", "alx/TRV-1-thing", "--dir", "thing", "--base", "main"]);
+    const out = await t.sc(["worktree", "--repo", root, "--branch", "alx/ABC-1-thing", "--dir", "thing", "--base", "main"]);
     expect(out.stdout).toContain("linked env files from .local/: .env");
     const wt = path.join(root, "thing");
     expect(fs.readlinkSync(path.join(wt, ".env"))).toBe("../.local/.env");
     const branch = spawnSync("git", ["-C", wt, "branch", "--show-current"], { encoding: "utf8" });
-    expect(branch.stdout.trim()).toBe("alx/TRV-1-thing");
+    expect(branch.stdout.trim()).toBe("alx/ABC-1-thing");
     const upstream = spawnSync("git", ["-C", wt, "rev-parse", "--abbrev-ref", "@{u}"], { encoding: "utf8" });
     expect(upstream.status).not.toBe(0);
     const reg = readJson(path.join(t.home, "state", "worktrees.json"));

@@ -267,7 +267,7 @@ async function setup(args: SetupArgs, ask: Asker): Promise<number> {
   linkBin(pathStr(expanduser(args.bin_dir || DEFAULT_BIN)), say);
   allowDataFolder(data);
   say("\nSous chef is installed. Next:\n" +
-    "  sc slack setup --help   to reach sous chef from Slack (optional; ask for a relay key)\n" +
+    "  sc slack setup --help   to reach sous chef from Slack (optional; needs the messaging relay, which is not published)\n" +
     "  souschef                to start sous chef and attach to it\n" +
     `If you ever run plain \`claude\` in ${CODE_ROOT}, accept its trust prompt the first time: until then\n` +
     `Claude Code ignores ${path.relative(CODE_ROOT, SETTINGS_LOCAL)}, which lets it edit your data folder.`);

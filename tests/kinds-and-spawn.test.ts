@@ -312,7 +312,7 @@ describe("KindListingTests", () => {
   });
 
   it("a longer skill name in the instructions does not count", async () => {
-    t.userKind("shaping", { extra: "skill: shape\n", body: "Run the `/shape-gui` skill." });
+    t.userKind("shaping", { extra: "skill: shape\n", body: "Run the `/shape-lite` skill." });
     t.userKind("namespaced", { extra: "skill: shape\n", body: "Run `/shape:deep`." });
     t.userKind("ends", { extra: "skill: shape\n", body: "Run /shape." });
     const out = (await t.sc(["kinds", "--runtime", "fake"])).stdout;

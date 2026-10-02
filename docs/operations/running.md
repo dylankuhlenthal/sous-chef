@@ -88,33 +88,9 @@ Sessions sous chef launched keep running; `sc sessions` lists them and `sc stop 
 
 The next `souschef` resumes the same sous chef, in the mode it was started with. To start a fresh one instead (for example to pick up a new permission mode), run `souschef --new`; it also works straight away without the steps above, since it stops the running sous chef itself. The new sous chef starts the watcher again.
 
-## Switching from the Python sous chef to TypeScript
+## An install still on the Python sous chef
 
-The core moved from Python to TypeScript, and `~/.sous-chef` was switched over with a one-off script (decision 0028, switching the live sous chef to TypeScript). The Python code and tests have since left the core. To switch another install that still runs the Python core, use the same script: it is in the core's history, in the commit before the one that deleted it. From a plain terminal, never from inside a Claude session:
-
-```sh
-git -C ~/.sous-chef fetch origin
-c=$(git -C ~/.sous-chef log -1 --full-history --diff-filter=D --format=%H origin/main -- switch-over/switch_over.py)
-git -C ~/.sous-chef show "$c^:switch-over/switch_over.py" > /tmp/switch_over.py
-python3 /tmp/switch_over.py --core ~/.sous-chef --check       # every check; changes nothing live
-python3 /tmp/switch_over.py --core ~/.sous-chef               # the switch; add --accept-stopped to keep stopped sessions
-```
-
-Decision 0028 says what it checks and does. One check no longer works as written: the script runs the Python test suite in a staged copy of `origin/main`, and `main` has no Python tests now, so that step tests nothing. Python 3.11 counts no tests as a pass; Python 3.12 and later fail the step, and the script refuses, so on those run it with a Python 3.11 (`python3.11 /tmp/switch_over.py ...`). Either way, run `npm ci && npm test` in a fresh clone of `main` yourself first, since the script's own check no longer does. After the switch, remove the Python caches git leaves behind (`rm -rf ~/.sous-chef/lib ~/.sous-chef/tests/__pycache__`): the core no longer ignores them, so they show as untracked files and the suite's "every tracked file is core" check fails in that folder.
-
-## Going back to the Python version
-
-The last Python commit is tagged `last-python`, and the tag keeps the whole Python tree, so going back still works now that the Python code has left `main`. It needs Python 3 again, since that is what the Python sous chef runs on. To go back:
-
-```sh
-python3 /tmp/switch_over.py --core ~/.sous-chef --rollback
-```
-
-It stops sous chef and the TypeScript watcher, checks out `last-python` (a detached HEAD; `dist/` and `node_modules/` stay, untracked and unused) and runs `souschef --print`, which resumes the same conversation on the Python code; its startup hook starts a Python watcher. By hand it is the same steps in the same order: `claude stop <short id>` (`sc chef` shows it), `kill $(cat ~/.sous-chef/my/state/watch.pid)` and wait until that process has gone, `git -C ~/.sous-chef checkout last-python`, `souschef`. The stops are not optional: a checkout does not change `dist/`, so the TypeScript watcher would keep running, and the Python startup hook cannot see its lock (Python and TypeScript lock differently), so it would start a second watcher beside it.
-
-After going back, sessions the TypeScript sc launched cannot run their hooks: their saved hook commands run `bin/sc` with Node, which cannot run the Python one, so each hook fails with a hook error (including the guard on `state/`); `sc report` from them still works. They also keep their turn times in Porch, not in `turns.json`, so the Python watcher's silent-stop check (`docs/domains/watcher.md`) never fires for them. Stop them before going back if you can (the rollback lists the ones still running), and relaunch the ones you still need. Sessions launched before the switch are not affected.
-
-To go forward again: `git -C ~/.sous-chef checkout main`, then the switch-over script again (without `--rollback`). It sees that `last-python` already names the Python commit and makes no new tag.
+The core moved from Python to TypeScript, and the Python code has left it. Only the first owner's install ever ran the Python core. The one-off script that switched it over, and the way back to the Python version (the tag `last-python`), are kept in decision 0028 (switching the live sous chef to TypeScript), under "Switching over and going back".
 
 ## How you hear about things
 

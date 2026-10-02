@@ -164,7 +164,7 @@ describe("on Porch's Claude adapter, with canned listings", () => {
     expect(await rt.status(rec)).toMatchObject({ alive: true, busy: true, prompt: "a dialog" });
   });
 
-  // Ported from ClaudeRuntimeParsingTests (TRV-1157). Seen live: Claude Code's `state` reads
+  // Ported from the Python suite's ClaudeRuntimeParsingTests. Seen live: Claude Code's `state` reads
   // "blocked" for a session whose last message asked the user something, with `status` idle, or
   // busy while a background command of its runs. No prompt is open, so it is left to the
   // session's own report.
@@ -540,7 +540,7 @@ describe("running Claude Code (a stub claude on PATH)", () => {
     expect(settings.crossSessionInbound).toBe("accept");
   });
 
-  // Ported from SouschefClaudeArgsTests (TRV-1157): the arguments souschef starts sous chef
+  // Ported from the Python suite's SouschefClaudeArgsTests: the arguments souschef starts sous chef
   // with refuse a permission value Claude Code has no mode for.
   it("start named refuses an unknown permission value", () => {
     expect(() => namedArgs("sous-chef", "hello", "everything")).toThrow(SCError);

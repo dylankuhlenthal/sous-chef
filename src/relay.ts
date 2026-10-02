@@ -1,6 +1,6 @@
 // The HTTP client for sous chef's messaging relay, the service that stands between Slack and sous chef.
 //
-// The relay (its own repo, `sous-chef-messaging-relay`; its `docs/architecture.md` is the
+// The relay (a separate service, not published; its own `docs/architecture.md` is the
 // contract) queues the Slack messages meant for the owner and posts sous chef's messages as
 // its bot. This module is the only code that talks to it. It knows the relay's routes
 // and its error answers, and nothing about sessions or the slack log (slack.ts).
