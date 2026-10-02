@@ -5,7 +5,7 @@ A kind is a way of working, such as investigating or building. Adding one is add
 ## Core kind or user kind
 
 - A **user kind** belongs to the person running sous chef. It goes in `my/kinds/`, in the owner's data folder (`util.userKindsDir()`). A user kind with the same name as a core kind replaces it as a whole file, which is how someone changes a built-in kind without editing the core; `sc kinds` then marks it `[user, replaces core]`. Kinds that run someone's own skills (such as the owner's `shape`, `build`, `mega-shape` and `orchestrate`) are user kinds.
-- A **core kind** ships with sous chef, in the core's `kinds/` (`util.kindsDir()`), and is on the core's path list (`tests/core_paths.py`). Core kinds need no skills, so they work for anyone: today `general` and `investigate`.
+- A **core kind** ships with sous chef, in the core's `kinds/` (`util.kindsDir()`), and is on the core's path list (`tests/core-paths.ts`). Core kinds need no skills, so they work for anyone: today `general` and `investigate`.
 
 Lookup order and the rest: "Kinds" in `docs/domains/sessions.md`.
 
@@ -44,8 +44,8 @@ Lookup order and the rest: "Kinds" in `docs/domains/sessions.md`.
    - what the `done` report must include (links, report path).
 
    Write `{{owner}}` wherever the instructions or the description name the owner; it is filled with the owner's name from `my/owner.json` (`kinds.load`, `ops.renderBrief`). Never write a name.
-6. Run `sc kinds` to check it loads, shows the right skill as found, and prints no warning. For a core kind, add it to `CORE_PATHS` in `tests/core_paths.py` (otherwise it is left out of the published core, and the check that every tracked file is core fails), update the captured `sc kinds` output (`SC_UPDATE_CAPTURED=1`), and update the core kinds table in `docs/domains/sessions.md` (including its permissions and skill columns) and any example in `AGENTS.md` that would now be wrong. Nothing checks that those lists match `kinds/`, so they drift if you skip this.
-7. Add a test if a core kind has behaviour worth pinning. Tests write their own kinds into the test home's `kinds/` (`ScTestCase.user_kind` in `tests/test_sc.py`) rather than depend on a shipped kind; `KindSkillTests` and `KindListingTests` show the shape.
+6. Run `sc kinds` to check it loads, shows the right skill as found, and prints no warning. For a core kind, add it to `CORE_PATHS` in `tests/core-paths.ts` (otherwise it is left out of the published core, and the check that every tracked file is core fails), update the captured `sc kinds` output (`SC_UPDATE_CAPTURED=1`), and update the core kinds table in `docs/domains/sessions.md` (including its permissions and skill columns) and any example in `AGENTS.md` that would now be wrong. Nothing checks that those lists match `kinds/`, so they drift if you skip this.
+7. Add a test if a core kind has behaviour worth pinning. Tests write their own kinds into the test home's `kinds/` (`ScTest.userKind` in `tests/helpers.ts`) rather than depend on a shipped kind; `KindSkillTests` and `KindListingTests` show the shape.
 
 ## Example
 

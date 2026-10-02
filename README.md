@@ -16,7 +16,7 @@ Your memory, jobs, kinds and settings live in your own data folder (by default `
 
 After every pull, rebuild: `docs/operations/running.md` ("The build, and updating after a pull").
 
-Tests: `npm test` (the build, the TypeScript unit tests, then `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests`).
+Tests: `npm test` (the build, then the whole suite with vitest).
 
 ## Docs
 

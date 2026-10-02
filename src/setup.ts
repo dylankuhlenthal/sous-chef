@@ -33,7 +33,7 @@ import { CODE_ROOT, DATA_LINK, ownerProblem, SCError, slug, writeJson } from "./
 export const DEFAULT_DATA = "~/.my-sous-chef";
 export const DEFAULT_BIN = "~/.local/bin";
 const MEMORY_FILES = ["focus.md", "threads/index.md", "ideas.md", "pocs.md", "repos.md"];
-export const DATA_GITIGNORE = "state/\n.env\n__pycache__/\n";
+export const DATA_GITIGNORE = "state/\n.env\n";
 const SETTINGS_LOCAL = path.join(CODE_ROOT, ".agents", "settings.local.json");
 
 export interface SetupArgs {

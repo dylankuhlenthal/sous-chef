@@ -3,8 +3,8 @@
 // canned (an injected `io` for Porch's Claude adapter), Porch's fake adapter, or a stub
 // `claude` first on PATH (tests/claude-stub.ts).
 //
-// Several tests replace the Python-only ClaudeRuntimeParsingTests (tests/test_sc.py), which
-// retire with the Python code; each says which behaviour it carries over.
+// Several tests replace the Python sc's ClaudeRuntimeParsingTests, which retired with the
+// Python code; each says which behaviour it carries over.
 import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";
@@ -40,8 +40,11 @@ afterEach(() => {
   fs.rmSync(tmp, { recursive: true, force: true });
 });
 
-const T1 = "2026-10-01T10:00:00.000Z";
-const T2 = "2026-10-01T10:05:30.500Z";
+// Turn and end times an hour before the run, not fixed dates: Porch prunes an ended record
+// 24 hours after it ended (STOPPED_RECORD_TTL_MS), so a fixed date stops being "ended" a day later.
+const BASE_MS = (Math.floor(Date.now() / 1000) - 3600) * 1000;
+const T1 = new Date(BASE_MS).toISOString();
+const T2 = new Date(BASE_MS + 330_500).toISOString();
 const secs = (iso: string) => Date.parse(iso) / 1000;
 
 // --- 1. Porch's fake adapter: the harness-neutral parts ---------------------------------
@@ -159,6 +162,17 @@ describe("on Porch's Claude adapter, with canned listings", () => {
   it("calls a prompt with neither waitingFor nor needs a dialog", async () => {
     const rt = setup([row({ status: "waiting" })]);
     expect(await rt.status(rec)).toMatchObject({ alive: true, busy: true, prompt: "a dialog" });
+  });
+
+  // Ported from ClaudeRuntimeParsingTests (TRV-1157). Seen live: Claude Code's `state` reads
+  // "blocked" for a session whose last message asked the user something, with `status` idle, or
+  // busy while a background command of its runs. No prompt is open, so it is left to the
+  // session's own report.
+  it("a session that ended its turn on a question is not held at a prompt", async () => {
+    for (const status of ["idle", "busy"]) {
+      const rt = setup([row({ pid: 10674, status, state: "blocked" })]);
+      expect((await rt.status(rec)).prompt).toBeNull();
+    }
   });
 
   // Replaces ClaudeRuntimeParsingTests' activity tests.
@@ -524,6 +538,12 @@ describe("running Claude Code (a stub claude on PATH)", () => {
       "StopFailure", "UserPromptSubmit"]);
     expect(Object.values(settings.hooks).flat().flatMap((e) => e.hooks).every((h) => / hooks claude on /.test(h.command))).toBe(true);
     expect(settings.crossSessionInbound).toBe("accept");
+  });
+
+  // Ported from SouschefClaudeArgsTests (TRV-1157): the arguments souschef starts sous chef
+  // with refuse a permission value Claude Code has no mode for.
+  it("start named refuses an unknown permission value", () => {
+    expect(() => namedArgs("sous-chef", "hello", "everything")).toThrow(SCError);
   });
 
   it("resumes sous chef's own session by id with no other flags, and returns its short id once listed", async () => {

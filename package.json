@@ -14,8 +14,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "//lint": "ESLint over the given files, or the whole repo with no arguments.",
     "lint": "eslint",
-    "//test": "Build, then the TypeScript unit tests (vitest), then the behaviour suite (Python, until it is ported to vitest).",
-    "test": "npm run build && vitest run && PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests"
+    "//test": "Build, then the whole suite with vitest (tests/*.test.ts).",
+    "test": "npm run build && vitest run"
   },
   "dependencies": {
     "@dylankuhlenthal/porch": "github:dylankuhlenthal/porch#v0.1.0",
