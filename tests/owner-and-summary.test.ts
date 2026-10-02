@@ -96,6 +96,27 @@ describe("OwnerTests", () => {
     expect(out).toContain("owner: Alex");
     expect(out).toContain("branch prefix: alx/");
     expect(out).toContain("waiting on: alex");
+    expect(out).toContain("sous chef's own permission mode: auto");
+  });
+
+  it("set changes only the fields given and keeps sous chef's permission mode", async () => {
+    let out = (await t.sc(["owner", "set", "--chef-permissions", "bypass"])).stdout;
+    expect(out).toContain("sous chef's own permission mode: bypass");
+    expect(readJson(ownerFile())).toEqual({ name: "Alex", branch_prefix: "alx/", chef_permissions: "bypass" });
+    out = (await t.sc(["owner", "set", "--name", "Sam"])).stdout;
+    expect(out).toContain("owner: Sam");
+    expect(readJson(ownerFile())).toEqual({ name: "Sam", branch_prefix: "alx/", chef_permissions: "bypass" });
+    await t.sc(["owner", "set", "--chef-permissions", "auto"]);
+    expect(readJson(ownerFile()).chef_permissions).toBe("auto");
+  });
+
+  it("set refuses a permission mode sous chef cannot have, and so does reading one", async () => {
+    for (const mode of ["ask", "accept-edits", "Bypass"]) {
+      expect((await t.sc(["owner", "set", "--chef-permissions", mode], { ok: false })).stderr).toContain("invalid choice");
+    }
+    expect(readJson(ownerFile())).toEqual({ name: "Alex", branch_prefix: "alx/" });
+    fs.writeFileSync(ownerFile(), JSON.stringify({ name: "Alex", branch_prefix: "alx/", chef_permissions: "ask" }));
+    expect((await t.sc(["owner"], { ok: false })).stderr).toContain("must be one of auto, bypass");
   });
 
   it("set writes owner json and the summary opens with it", async () => {
@@ -117,8 +138,15 @@ describe("OwnerTests", () => {
       expect((await t.sc(["owner", "set", "--name", name, "--branch-prefix", "x/"],
         { ok: false })).stderr).toContain("printable");
     }
-    expect((await t.sc(["owner", "set", "--name", "Sam"], { ok: false })).stderr).toContain("usage: sc owner set");
+    expect((await t.sc(["owner", "set"], { ok: false })).stderr).toContain("usage: sc owner set");
+    expect((await t.sc(["owner", "set", "--name", ""], { ok: false })).stderr).toContain("usage: sc owner set");
     expect(readJson(ownerFile()).name).toBe("Alex");
+    fs.unlinkSync(ownerFile());
+    for (const flags of [["--name", "Sam"], ["--branch-prefix", "sam/"], ["--chef-permissions", "bypass"]]) {
+      expect((await t.sc(["owner", "set", ...flags], { ok: false })).stderr, flags.join(" "))
+        .toContain("--name and --branch-prefix are both needed");
+    }
+    expect(fs.existsSync(ownerFile())).toBe(false);
   });
 
   it("an empty branch prefix is allowed", async () => {

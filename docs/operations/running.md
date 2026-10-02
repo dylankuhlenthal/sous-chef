@@ -21,12 +21,13 @@ git clone <the sous chef core repo> ~/.sous-chef
 | --- | --- |
 | Data folder | Default `~/.my-sous-chef`. An existing sous chef data folder is used as it is. Otherwise you can clone one from a git URL, or a new one is made with starter files: the memory files the summary shows, a feedback file named in `instructions.md`, empty `cron/` and `kinds/`, `instructions.md` and `worker-instructions.md` with a comment saying what they are for, and a `.gitignore` for `state/` and `.env`. |
 | Owner | Only when the folder has no `owner.json`: your name and branch prefix. `sc owner set` changes them later. |
+| Sous chef's own permission mode | Only when `owner.json` has none: `auto` or `bypass`, after a paragraph on what each risks ("Permission mode" under "Start sous chef" below). Default `auto`. `sc owner set --chef-permissions` changes it later. |
 | Track in git? | A new folder only: `git init` and a first commit. |
 | Push to a remote? | When the data folder is a git repo with no `origin`: the URL of an empty private repo you made. It never creates repos. Once pushed, the watcher keeps it committed and pushed (`docs/domains/watcher.md`, check 9). |
 
-Then it makes the `my` link in the core, links `sc` and `souschef` into `~/.local/bin`, writes `.agents/settings.local.json` so a plain `claude` in the core may edit the data folder as it edits the core, and says how to set up Slack. Every question has a flag (`--data`, `--clone`, `--git`/`--no-git`, `--push-url`, `--name`, `--branch-prefix`, `--bin-dir`, `--yes`; `sc setup --help`), and running it again is safe: what is in place is left alone. It refuses a `my` link that points somewhere else (remove the link first; the data behind it is not touched) and a core folder that still holds `memory/` and `state/`.
+Then it makes the `my` link in the core, links `sc` and `souschef` into `~/.local/bin`, writes `.agents/settings.local.json` so a plain `claude` in the core may edit the data folder as it edits the core, and says how to set up Slack. Every question has a flag (`--data`, `--clone`, `--git`/`--no-git`, `--push-url`, `--name`, `--branch-prefix`, `--chef-permissions`, `--bin-dir`, `--yes`; `sc setup --help`). With `--yes`, a new `owner.json` gets `auto`, and an existing one without a permission mode is left as it is (no value means `auto`). Running it again is safe: what is in place is left alone. It refuses a `my` link that points somewhere else (remove the link first; the data behind it is not touched) and a core folder that still holds `memory/` and `state/`. It leaves alone an `sc` or `souschef` in the bin folder that is a file, or a link to something other than this core, and says how to replace it.
 
-Claude Code only reads `.agents/settings.local.json` in a folder you have trusted, so if you run plain `claude` in the core, accept its trust prompt the first time. Sous chef itself runs in bypass mode (decision 0015) and does not need it.
+Claude Code only reads `.agents/settings.local.json` in a folder you have trusted, so if you run plain `claude` in the core, accept its trust prompt the first time. A sous chef in `auto` mode relies on it to edit the data folder without asking; one in `bypass` mode does not need it.
 
 Sessions do not need `sc` on `PATH`: their brief gives its full path.
 
@@ -66,7 +67,7 @@ Run `souschef` from any terminal. It uses the session registered in `my/state/ch
 | --- | --- |
 | Sous chef is running in the background | Attaches to it |
 | Sous chef is stopped | Resumes the same session in the background (checking it really is the same one), then attaches |
-| Nothing registered, or the resume did not bring the session back | Starts a new background session named `sous-chef` in bypass permission mode, with a short first message, then attaches |
+| Nothing registered, or the resume did not bring the session back | Starts a new background session named `sous-chef` in the owner's permission mode (`chef_permissions`), says which, sends a short first message, then attaches |
 | Sous chef is open in a terminal (someone ran `claude` in the core) | Says so and exits, since that session cannot be attached to |
 | There is no data folder | Says to run `install.sh`, and exits |
 
@@ -75,7 +76,12 @@ Run `souschef` from any terminal. It uses the session registered in `my/state/ch
 - `souschef --new` stops the current background sous chef (its conversation is kept) and starts a fresh one. If sous chef is already stopped it just starts a fresh one, and if it is open in a terminal it refuses, since it cannot stop that one for you.
 - `souschef --print` does everything except attach, and prints the attach command. Without `--print`, `souschef` replaces itself with `claude attach`, so you land in the session and your shell returns when you leave it.
 
-**Permission mode.** A sous chef that `souschef` starts runs in bypass mode: nothing it does waits for a person. The owner chose this knowing sous chef reads email and Slack from other people and can run commands, push and write to Linear, so a mistake or a hidden instruction it wrongly follows goes ahead unseen; only its instructions stand in the way. See decision 0015 (sous chef itself runs in bypass mode). A resumed sous chef keeps the mode it was started with, so a sous chef started before this change keeps its old mode until `souschef --new`. Sessions sous chef spawns take their kind's mode (see "Permissions" in `docs/domains/sessions.md`). The setting is `PERMISSIONS` in `src/souschef.ts`.
+**Permission mode.** A sous chef that `souschef` starts runs in the mode the owner chose, `chef_permissions` in `my/owner.json` (`sc owner` shows it; `auto` when unset). `sc setup` asks, after explaining both (`CHEF_PERMISSIONS_RISK` in `src/setup.ts`):
+
+- `auto`: Claude Code's classifier checks each action, and one it judges risky waits for a person. Sous chef can then sit at a prompt while you are away, with nothing watching sous chef itself to tell you.
+- `bypass`: nothing it does waits for a person. Sous chef reads what sessions report (and Slack, if set up, including messages from other people) and can run commands, push branches and write to your tools, so a mistake, or an instruction hidden in what it reads that it wrongly follows, goes ahead unseen; only its instructions stand in the way.
+
+Change it with `sc owner set --chef-permissions <auto|bypass>`. A resumed sous chef keeps the mode it was started with (`souschef` says so), so a changed setting takes effect at the next `souschef --new`. Sessions sous chef spawns take their kind's mode (see "Permissions" in `docs/domains/sessions.md`). See decision 0031 (sous chef's own permission mode is the owner's setting), which replaced decision 0015 (sous chef itself runs in bypass mode).
 
 Running `claude` in `~/.sous-chef` also works and registers that session as sous chef, but it only lives as long as that terminal. Running only one sous chef at a time is expected; the startup summary warns if a different sous chef session was registered before.
 

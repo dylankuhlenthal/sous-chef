@@ -463,11 +463,25 @@ describe("SouschefTests", () => {
       .filter(([k]) => k.startsWith("fake-chef-")));
   }
 
-  it("with nothing registered a new sous chef is started in bypass mode", async () => {
+  it("with nothing registered a new sous chef is started in auto mode when the owner chose none", async () => {
     const out = (await souschef()).stdout;
-    expect(out).toBe("started sous chef (chef-1) with permissions: bypass\nfake attach chef-1\n");
+    expect(out).toBe("started sous chef (chef-1) with permissions: auto\nfake attach chef-1\n");
     const row = started()["fake-chef-1"];
-    expect([row.name, row.permissions, row.cwd]).toEqual(["sous-chef", "bypass", ROOT]);
+    expect([row.name, row.permissions, row.cwd]).toEqual(["sous-chef", "auto", ROOT]);
+  });
+
+  it("a new sous chef starts in the permission mode the owner chose", async () => {
+    await t.sc(["owner", "set", "--chef-permissions", "bypass"]);
+    expect((await souschef()).stdout).toBe("started sous chef (chef-1) with permissions: bypass\nfake attach chef-1\n");
+    expect(started()["fake-chef-1"].permissions).toBe("bypass");
+  });
+
+  it("an owner json with a permission mode sous chef cannot have is refused", async () => {
+    write(path.join(t.home, "owner.json"), JSON.stringify({ name: "Alex", branch_prefix: "alx/", chef_permissions: "ask" }));
+    const out = await souschef([], { ok: false });
+    expect(out.code).toBe(1);
+    expect(out.stderr).toContain("sous chef's own permission mode must be one of auto, bypass");
+    expect(fs.existsSync(path.join(t.home, "state", "fake-runtime.json")), "nothing was started").toBe(false);
   });
 
   it("a running background sous chef is attached not started", async () => {
@@ -493,7 +507,7 @@ describe("SouschefTests", () => {
       fakeRows(rows);
       const out = (await souschef()).stdout;
       const short = Object.keys(rows).length ? "abcd1234" : "chef-1";
-      expect(out).toBe(`resumed sous chef (${short})\nfake attach ${short}\n`);
+      expect(out).toBe(`resumed sous chef (${short}); it keeps the permission mode it was started with\nfake attach ${short}\n`);
       expect(t.fakeState().sessions["chef-1"].pid).toBe(1);
       expect(started()).toEqual({});
     }
@@ -504,7 +518,7 @@ describe("SouschefTests", () => {
     fakeRows({ "chef-1": { alive: false, kind: "background", id: "abcd1234" } });
     const out = (await souschef([], { env: { SC_FAKE_RESUME_FAILS: "1" } })).stdout;
     expect(out).toBe("could not resume the previous sous chef session; starting a new one\n" +
-      "started sous chef (chef-1) with permissions: bypass\nfake attach chef-1\n");
+      "started sous chef (chef-1) with permissions: auto\nfake attach chef-1\n");
     expect(Object.keys(started())).toEqual(["fake-chef-1"]);
   });
 
@@ -513,10 +527,10 @@ describe("SouschefTests", () => {
     fakeRows({ "chef-1": { alive: true, pid: 1, kind: "background", id: "abcd1234" } });
     const out = (await souschef(["--new"])).stdout;
     expect(out).toBe("stopped the previous sous chef (abcd1234); its conversation is kept\n" +
-      "started sous chef (chef-1) with permissions: bypass\nfake attach chef-1\n");
+      "started sous chef (chef-1) with permissions: auto\nfake attach chef-1\n");
     const old = t.fakeState().sessions["chef-1"];
     expect(old.alive).toBe(false);
     expect(Object.keys(old)).not.toContain("pid");
-    expect(started()["fake-chef-1"].permissions).toBe("bypass");
+    expect(started()["fake-chef-1"].permissions).toBe("auto");
   });
 });

@@ -105,7 +105,7 @@ Scheduled worker jobs launch through `ops.spawn` without a flag, so a job takes 
 
 A session keeps its permission mode when resumed. `sc resume` passes no flags (below), and Claude Code reuses the flags it saved at launch.
 
-Sous chef's own session is not spawned: `souschef` starts it with the runtime's `startNamed` (the Claude runtime's for real, through Porch's launch plan; the fake runtime's in tests, chosen by `SC_CHEF_RUNTIME`), passing `souschef.PERMISSIONS`, which is `bypass`, through the same mapping. See decision 0015 (sous chef itself runs in bypass mode) and "Start sous chef" in `docs/operations/running.md`.
+Sous chef's own session is not spawned: `souschef` starts it with the runtime's `startNamed` (the Claude runtime's for real, through Porch's launch plan; the fake runtime's in tests, chosen by `SC_CHEF_RUNTIME`), passing `souschef.permissions()`, the owner's `chef_permissions` (`auto` or `bypass`, `auto` when unset), through the same mapping. See decision 0031 (sous chef's own permission mode is the owner's setting) and "Start sous chef" in `docs/operations/running.md`.
 
 ## Which session is calling
 

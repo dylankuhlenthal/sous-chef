@@ -34,7 +34,7 @@ The data folder (`my/`):
 - `my/memory/`: your own notes. You edit these directly.
 - `my/cron/`: one file per scheduled job, written by `sc cron add` and `sc cron remove`.
 - `my/context.json`: when your Stop hook warns you that your context is filling, written by `sc context set` (only when the owner asks).
-- `my/owner.json`: who you work for, written at install; `sc owner set` changes it (only when the owner asks).
+- `my/owner.json`: who you work for, and the permission mode your own session starts in, written at install; `sc owner set` changes it (only when the owner asks).
 - `my/state/`: sessions, event logs, inboxes, read positions, watcher files. **Written by `sc` commands; never edit by hand** (the one exception is a session writing its own `report.md`). A hook blocks the file-editing tools there, for you and for sessions, but not shell commands, so the rule is yours to keep too: no `sed -i`, no redirects into `state/`.
 - `my/.env`: Slack settings, written by `sc slack setup`.
 
@@ -71,7 +71,7 @@ Everything mechanical is an `sc` command. Run `sc --help` or `sc <command> --hel
 | `sc send <id> "..."`, `sc send <id> --resolves <key> "..."` | Message a session, or answer its open question |
 | `sc mark <id> <waiting-on> "why"` | Record who a session waits on after you handled something |
 | `sc attach <id>` | The command the owner runs to open a session |
-| `sc owner`, `sc owner set` | Who you work for (name and branch prefix); `set` only when the owner asks |
+| `sc owner`, `sc owner set` | Who you work for (name and branch prefix) and your own permission mode; `set` only when the owner asks |
 | `sc stop <id>`, `sc resume <id>` | Park a session and bring it back with its conversation |
 | `sc cleanup <id>` | Retire a finished session; it refuses if work looks unlanded |
 | `sc cron`, `sc cron add\|remove\|run <name>` | Scheduled jobs: list them, add or remove one (only when the owner asks), fire one now to test it. Details: `docs/domains/cron.md` |
@@ -188,7 +188,7 @@ Any session started in this folder or a worktree of it runs the `chef-start` hoo
 
 A session runs as you do, with the owner's own Claude Code setup: skills, MCP servers, global instructions and command line tools. This was checked by asking a real session (`docs/domains/sessions.md`, "What a session inherits"). So a kind can tell a session to run one of the owner's skills. A kind declares that skill in its `skill` field: `sc spawn` refuses the kind when the skill is missing, and `sc kinds` shows whether it is found. The brief tells every session to report `blocked` when a skill or tool it needs is not available.
 
-Sessions launch in their kind's permission mode (`auto` for a kind that names none) unless `sc spawn --permissions` chose another; `sc status <id>` shows which. You run in bypass mode when `souschef` started you (decision 0015), so nothing you do waits for the owner: your instructions are the only check.
+Sessions launch in their kind's permission mode (`auto` for a kind that names none) unless `sc spawn --permissions` chose another; `sc status <id>` shows which. When `souschef` started you, you run in the permission mode the owner chose (`sc owner` shows it; decision 0031). In `bypass` nothing you do waits for the owner, so your instructions are the only check; in `auto` an action Claude Code's classifier judges risky waits at a prompt, and nobody is told unless the owner is attached.
 
 ## Testing
 

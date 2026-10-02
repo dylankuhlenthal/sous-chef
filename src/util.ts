@@ -99,9 +99,10 @@ export function scBin(): string {
 }
 
 // --- the owner ---------------------------------------------------------------
-// The person this sous chef works for: their name and branch prefix, in owner.json at
-// the root of the data folder, written by `sc setup` or `sc owner set`. Nothing else
-// opens the file; everything reads it through owner().
+// The person this sous chef works for: their name and branch prefix, and the permission
+// mode sous chef's own session starts in, in owner.json at the root of the data folder,
+// written by `sc setup` or `sc owner set`. Nothing else opens the file; everything reads
+// it through owner().
 
 export const NO_OWNER = "no owner set: run sc owner set --name <name> --branch-prefix <prefix>";
 
@@ -109,10 +110,23 @@ export const NO_OWNER = "no owner set: run sc owner set --name <name> --branch-p
 // The owner's name in lower case stands for `owner`, so it may not be one of the others.
 export const WAITING_VALUES = new Set(["owner", "agent", "sc", "external", "nobody"]);
 
+// The permission modes the owner can choose for sous chef's own session (decision 0031).
+// A file without the field means the default.
+export const CHEF_PERMISSIONS = ["auto", "bypass"] as const;
+export type ChefPermissions = typeof CHEF_PERMISSIONS[number];
+export const DEFAULT_CHEF_PERMISSIONS: ChefPermissions = "auto";
+
 export interface Owner {
   name: string;
   lower: string;
   branch_prefix: string;
+  chef_permissions: ChefPermissions;
+}
+
+/** Why this cannot be sous chef's own permission mode, or null. */
+export function chefPermissionsProblem(value: unknown): string | null {
+  return (CHEF_PERMISSIONS as readonly unknown[]).includes(value) ? null
+    : `sous chef's own permission mode must be one of ${CHEF_PERMISSIONS.join(", ")}`;
 }
 
 /** Why this name and branch prefix cannot be the owner's, or null. Checked on write and on every read. */
@@ -135,7 +149,7 @@ export function ownerPath(): string {
 }
 
 /**
- * The owner as {name, lower, branch_prefix}, or null when owner.json does not exist.
+ * The owner as {name, lower, branch_prefix, chef_permissions}, or null when owner.json does not exist.
  *
  * `lower` is the name in lower case: how the owner shows as a waiting-on value
  * (events.ts). Throws SCError when the file exists but cannot be used.
@@ -158,10 +172,12 @@ export function owner(): Owner | null {
   if (name === undefined || name === null || prefix === undefined || prefix === null) {
     throw new SCError(`${p} needs a name and a branch_prefix; rewrite it with \`sc owner set\``);
   }
-  const problem = ownerProblem(name, prefix);
+  const chefPermissions = (data as Record<string, unknown>).chef_permissions ?? DEFAULT_CHEF_PERMISSIONS;
+  const problem = ownerProblem(name, prefix) ?? chefPermissionsProblem(chefPermissions);
   if (problem) throw new SCError(`${p} cannot be used: ${problem}; rewrite it with \`sc owner set\``);
   const n = strip(name as string);
-  return { name: n, lower: n.toLowerCase(), branch_prefix: prefix as string };
+  return { name: n, lower: n.toLowerCase(), branch_prefix: prefix as string,
+    chef_permissions: chefPermissions as ChefPermissions };
 }
 
 /** The owner, or a refusal saying how to set one. For commands that cannot run without one. */

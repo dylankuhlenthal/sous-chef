@@ -9,9 +9,9 @@
 //   registered session exists but is stopped       -> resume it in the background, then attach
 //   nothing registered, or it cannot be resumed    -> start a new one, then attach
 //
-// A new sous chef starts with PERMISSIONS (bypass: nothing ever asks), the owner's
-// choice (docs/decisions/0015). A resumed one keeps the mode it was started with,
-// so switching an older sous chef over takes `souschef --new`.
+// A new sous chef starts in the permission mode the owner chose (chef_permissions in
+// owner.json, `auto` when unset; docs/decisions/0031). A resumed one keeps the mode it
+// was started with, so a changed setting takes effect with `souschef --new`.
 //
 // `souschef --new` stops the registered background session (its conversation is
 // kept) and starts a fresh one. `souschef --print` does everything except attach
@@ -27,11 +27,14 @@ import { print, printErr } from "./io.js";
 import { Dict, get, truthy } from "./py.js";
 import * as runtimes from "./runtimes/index.js";
 import { Listing } from "./runtimes/index.js";
-import { CODE_ROOT, ownerName, SCError } from "./util.js";
+import { CODE_ROOT, DEFAULT_CHEF_PERMISSIONS, owner, ownerName, SCError } from "./util.js";
 
 export const SESSION_NAME = "sous-chef";
-// sc's permission value for sous chef's own session (runtimes.PERMISSIONS).
-export const PERMISSIONS = "bypass";
+
+/** sc's permission value for a new sous chef session (runtimes.PERMISSIONS): the owner's setting. */
+export function permissions(): string {
+  return owner()?.chef_permissions ?? DEFAULT_CHEF_PERMISSIONS;
+}
 
 /**
  * A first message, so the new session has a saved conversation it can later be
@@ -114,7 +117,7 @@ export async function main(argv: string[]): Promise<number> {
     if (action === "resume") {
       const short = await rt.resumeSessionId(detail as string, CODE_ROOT, env());
       if (short) {
-        print(`resumed sous chef (${short})`);
+        print(`resumed sous chef (${short}); it keeps the permission mode it was started with`);
         action = "attach";
         detail = short;
       } else {
@@ -123,8 +126,9 @@ export async function main(argv: string[]): Promise<number> {
       }
     }
     if (action === "start") {
-      detail = await rt.startNamed(SESSION_NAME, firstPrompt(), CODE_ROOT, env(), PERMISSIONS);
-      print(`started sous chef (${detail as string}) with permissions: ${PERMISSIONS}`);
+      const mode = permissions();
+      detail = await rt.startNamed(SESSION_NAME, firstPrompt(), CODE_ROOT, env(), mode);
+      print(`started sous chef (${detail as string}) with permissions: ${mode}`);
     }
 
     if (args.print_only) {

@@ -10,6 +10,9 @@
 //                 is used as it is; otherwise --clone <url> clones one, or a new one
 //                 is made with starter files.
 //   owner         only when the folder has no owner.json: --name, --branch-prefix
+//   permissions   the mode sous chef's own session starts in, when owner.json has none:
+//                 --chef-permissions auto|bypass, explained first (decision 0031); with
+//                 --yes a new owner.json gets auto and an existing one is left as it is
 //   git           a new folder only: --git / --no-git (git init and a first commit)
 //   push          a git data folder with no `origin`: --push-url <url of an empty repo
 //                 you made>; setup never creates repos
@@ -19,7 +22,8 @@
 //                 once the folder is trusted)
 //
 // Running it again is safe: what is already in place is left alone. It refuses a
-// `my` link that points somewhere else, and the old combined layout.
+// `my` link that points somewhere else, and the old combined layout. An `sc` or
+// `souschef` in --bin-dir that is not a link to this core is left alone, with a note.
 
 import fs from "node:fs";
 import path from "node:path";
@@ -28,7 +32,9 @@ import { print, stdinIsTty } from "./io.js";
 import { run } from "./proc.js";
 import { dumps, JSONDecodeError, loads } from "./pyjson.js";
 import { capitalize, Dict, exists, expanduser, isDict, isSymlink, listDir, pathStr, readText, resolvePath, splitWs, stem, strip } from "./py.js";
-import { CODE_ROOT, DATA_LINK, ownerProblem, SCError, slug, writeJson } from "./util.js";
+import {
+  chefPermissionsProblem, CODE_ROOT, DATA_LINK, DEFAULT_CHEF_PERMISSIONS, ownerProblem, SCError, slug, writeJson,
+} from "./util.js";
 
 export const DEFAULT_DATA = "~/.my-sous-chef";
 export const DEFAULT_BIN = "~/.local/bin";
@@ -44,6 +50,7 @@ export interface SetupArgs {
   name: string | null;
   branch_prefix: string | null;
   bin_dir: string | null;
+  chef_permissions: string | null;
   yes: boolean;
 }
 
@@ -143,14 +150,61 @@ function writeOwner(data: string, name: string | null, prefix: string | null): v
   writeJson(path.join(data, "owner.json"), { name: n, branch_prefix: prefix });
 }
 
+export const CHEF_PERMISSIONS_RISK =
+  "Sous chef's own session runs in one of two Claude Code permission modes:\n" +
+  "  auto    a classifier checks each action, and one it judges risky waits for you. Sous chef can then sit\n" +
+  "          at a prompt while you are away, and nothing tells you.\n" +
+  "  bypass  nothing ever waits for you. Sous chef reads what sessions report (and Slack, if you set it up),\n" +
+  "          and can run commands, push branches and write to your tools, so a mistake, or an instruction\n" +
+  "          hidden in what it reads that it wrongly follows, goes ahead with nobody seeing it. Only its\n" +
+  "          instructions stand in the way.\n" +
+  "Sessions it launches take their own kind's mode either way. Change it later with\n" +
+  "sc owner set --chef-permissions.";
+
+/**
+ * Sous chef's own permission mode, when owner.json has none: the flag, else the owner's
+ * answer after the risk is explained, else (with --yes or no terminal) auto for a new
+ * owner.json and nothing for an existing one, where a missing value already means auto.
+ */
+async function chooseChefPermissions(data: string, args: SetupArgs, ask: Asker, newOwner: boolean,
+  say: (s: string) => void): Promise<void> {
+  const file = path.join(data, "owner.json");
+  const ownerData = loads(readText(file)) as Dict;
+  if (ownerData.chef_permissions !== undefined && ownerData.chef_permissions !== null) {
+    if (args.chef_permissions && args.chef_permissions !== ownerData.chef_permissions) {
+      say(`left sous chef's own permission mode at ${String(ownerData.chef_permissions)}; ` +
+        `change it with sc owner set --chef-permissions ${args.chef_permissions}`);
+    }
+    return;
+  }
+  let mode = args.chef_permissions;
+  if (mode === null && ask.interactive) {
+    say(CHEF_PERMISSIONS_RISK);
+    for (;;) {
+      mode = await ask.text("Sous chef's own permission mode (auto or bypass)", null, DEFAULT_CHEF_PERMISSIONS);
+      if (chefPermissionsProblem(mode) === null) break;
+      say("answer auto or bypass");
+    }
+  }
+  if (mode === null && newOwner) mode = DEFAULT_CHEF_PERMISSIONS;
+  if (mode === null) return;
+  const problem = chefPermissionsProblem(mode);
+  if (problem) throw new SCError(problem);
+  writeJson(file, { ...ownerData, chef_permissions: mode });
+  say(`sous chef's own session will start in permission mode ${mode}`);
+}
+
 function linkBin(binDir: string, say: (s: string) => void): void {
   fs.mkdirSync(binDir, { recursive: true });
   for (const name of ["sc", "souschef"]) {
     const target = path.join(CODE_ROOT, "bin", name);
     const link = path.join(binDir, name);
     if (isSymlink(link)) {
-      if (pathStr(fs.readlinkSync(link)) === target) continue;
-      fs.unlinkSync(link);
+      const current = pathStr(fs.readlinkSync(link));
+      if (current === target) continue;
+      say(`left ${link} alone: it points to ${current}, not this sous chef. To use this one from any ` +
+        `terminal, replace it (ln -sfn ${target} ${link}), or run ${target} by its path`);
+      continue;
     } else if (exists(link)) {
       say(`left ${link} alone: it is a file, not a link; run ${target} by its path, or replace it`);
       continue;
@@ -224,12 +278,14 @@ async function setup(args: SetupArgs, ask: Asker): Promise<number> {
     }
   }
 
-  if (!exists(path.join(data, "owner.json"))) {
+  const newOwner = !exists(path.join(data, "owner.json"));
+  if (newOwner) {
     const name = await ask.text("Your name, as sessions and Slack show it", args.name, null, "--name");
     const prefix = await ask.text("Your branch prefix, e.g. sam/ (blank for none)", args.branch_prefix, "");
     writeOwner(data, name, prefix);
     say(`wrote ${path.join(data, "owner.json")}`);
   }
+  await chooseChefPermissions(data, args, ask, newOwner, say);
   const ownerData = loads(readText(path.join(data, "owner.json"))) as Dict;
   const ownerLower = strip(String(ownerData.name ?? "me")).toLowerCase();
 
