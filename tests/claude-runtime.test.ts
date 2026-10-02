@@ -6,6 +6,7 @@
 // Several tests replace the Python-only ClaudeRuntimeParsingTests (tests/test_sc.py), which
 // retire with the Python code; each says which behaviour it carries over.
 import fs from "node:fs";
+import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import {
@@ -130,10 +131,12 @@ function row(fields: Record<string, unknown> = {}) {
 }
 
 describe("on Porch's Claude adapter, with canned listings", () => {
-  function setup(rows: unknown[] | { code: number | null; stderr: string }, jobs: Record<string, unknown> = {}) {
+  function setup(rows: unknown[] | { code: number | null; stderr: string }, jobs: Record<string, unknown> = {},
+                 count = { agents: 0 }) {
     const io: HarnessIO = {
       async run(_cmd, args) {
         if (args[0] !== "agents") return { code: 1, stdout: "", stderr: "unexpected" };
+        count.agents++;
         if (!Array.isArray(rows)) return { code: rows.code, stdout: "", stderr: rows.stderr };
         return { code: 0, stdout: JSON.stringify(rows), stderr: "" };
       },
@@ -194,7 +197,7 @@ describe("on Porch's Claude adapter, with canned listings", () => {
   it("reads a session Porch does not know as not running, not found", async () => {
     const rt = setup([]);
     expect(await rt.status(rec)).toEqual({ alive: false, busy: null, pid: null, prompt: null, activity: null,
-      stopped: { status: "not found", reason: null } });
+      stopped: { source: "Porch", status: "not found", reason: null } });
     expect(await rt.statusSessionId(SID, await rt.listing())).toMatchObject({ alive: false });
   });
 
@@ -257,6 +260,114 @@ describe("on Porch's Claude adapter, with canned listings", () => {
     expect(await rt.status(rec, rows)).toMatchObject({ alive: true, busy: true, pid: 4242 });
   });
 
+  // A socket this test owns, in its own folder: Porch delivers to the address a session's
+  // record names, so no wake-up here ever goes near Claude Code's real socket folders.
+  async function probe() {
+    const dir = fs.mkdtempSync("/tmp/sc-wake-");
+    const address = path.join(dir, "probe.sock");
+    const texts: string[] = [];
+    const server = net.createServer((conn) => {
+      let buf = "";
+      conn.on("data", (b) => (buf += String(b)));
+      conn.on("end", () => {
+        for (const line of buf.split("\n").filter(Boolean)) {
+          texts.push((JSON.parse(line) as { message: { content: string } }).message.content);
+        }
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(address, resolve));
+    const close = () => new Promise<void>((resolve) => server.close(() => resolve())).then(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const received = async (n: number) => {
+      for (let i = 0; i < 200 && texts.length < n; i++) await new Promise((r) => setTimeout(r, 10));
+      return texts;
+    };
+    return { address, received, close };
+  }
+  // No process has this pid (macOS pids stop at 99998), so nothing here can be a real session.
+  const NOPID = 99999;
+
+  it("wakes the session status reads: after /clear, the new session id running under the same short id", async () => {
+    const NEW = "22222222-2222-3333-4444-555555555555";
+    const store = new RecordStore(sessionsDir(env));
+    await store.updateInside("claude", SID, { pid: NOPID, status: "idle", data: { shortId: SHORT } });
+    await store.updateInside("claude", SID, { status: "ended", endedAt: T2, endReason: "clear" });
+    const p = await probe();
+    try {
+      await store.updateInside("claude", NEW, { pid: NOPID, status: "idle", delivery: { via: "socket", address: p.address } });
+      const rt = setup([row({ sessionId: NEW, pid: NOPID })]);
+      expect(await rt.status(rec)).toMatchObject({ alive: true, busy: false });
+      await rt.wake(rec, "sous chef: new message 1");
+      await rt.wake(rec, "sous chef: new message 2", await rt.listing());
+      expect(await p.received(2)).toEqual(["[from sous chef] sous chef: new message 1", "[from sous chef] sous chef: new message 2"]);
+    } finally {
+      await p.close();
+    }
+  });
+
+  it("wakes a running session by its session id, or by its short id alone, as before", async () => {
+    const store = new RecordStore(sessionsDir(env));
+    const p = await probe();
+    try {
+      await store.updateInside("claude", SID, { pid: NOPID, status: "idle", delivery: { via: "socket", address: p.address } });
+      const rt = setup([row({ pid: NOPID })]);
+      await rt.wake(rec, "one");
+      await rt.wake({ id: "general-x-1234", handle: { short_id: SHORT } }, "two");
+      await rt.wake(rec, "three", await rt.listing());
+      expect(await p.received(3)).toEqual(["[from sous chef] one", "[from sous chef] two", "[from sous chef] three"]);
+    } finally {
+      await p.close();
+    }
+  });
+
+  // Python's wake read the listing once. Porch's deliver reads `claude agents` twice on its
+  // own (once to find the harness, once in the Claude adapter), so that is the floor: a
+  // wake-up adds no listing of sous chef's, except after `/clear`, where the recorded id is
+  // refused first and the session is then looked up once and delivered to.
+  it("adds no claude agents listing of its own to a wake-up, except after /clear", async () => {
+    const NEW = "22222222-2222-3333-4444-555555555555";
+    const store = new RecordStore(sessionsDir(env));
+    const p = await probe();
+    try {
+      await store.updateInside("claude", SID, { pid: NOPID, status: "idle", delivery: { via: "socket", address: p.address } });
+      const count = { agents: 0 };
+      const rt = setup([row({ pid: NOPID })], {}, count);
+      await rt.wake(rec, "plain");
+      expect(count.agents).toBe(2);
+      count.agents = 0;
+      await rt.wake({ id: "general-x-1234", handle: { short_id: SHORT } }, "plain by short id");
+      expect(count.agents).toBe(2);
+      const rows = await rt.listing();
+      count.agents = 0;
+      await rt.wake(rec, "plain with rows", rows);
+      expect(count.agents).toBe(2);
+
+      // After /clear: the old id ended, the short id running under a new id.
+      await store.updateInside("claude", SID, { status: "ended", endedAt: T2, endReason: "clear", data: { shortId: SHORT } });
+      await store.updateInside("claude", NEW, { pid: NOPID, status: "idle", delivery: { via: "socket", address: p.address } });
+      const cleared = { agents: 0 };
+      const rt2 = setup([row({ sessionId: NEW, pid: NOPID })], {}, cleared);
+      await rt2.wake(rec, "after clear");
+      expect(cleared.agents).toBe(5); // refused (2), one lookup (1), delivered (2)
+      const clearedRows = await rt2.listing();
+      cleared.agents = 0;
+      await rt2.wake(rec, "after clear with rows", clearedRows);
+      expect(cleared.agents).toBe(2);
+      expect(await p.received(5)).toEqual(["[from sous chef] plain", "[from sous chef] plain by short id",
+        "[from sous chef] plain with rows", "[from sous chef] after clear", "[from sous chef] after clear with rows"]);
+    } finally {
+      await p.close();
+    }
+  });
+
+  it("refuses to wake an ended session with nothing running under its short id, with Porch's reason, as before", async () => {
+    const store = new RecordStore(sessionsDir(env));
+    await store.updateInside("claude", SID, { pid: NOPID, status: "idle", data: { shortId: SHORT } });
+    await store.updateInside("claude", SID, { status: "ended", endedAt: T2, endReason: "idle" });
+    const rt = setup([]);
+    await expect(rt.wake(rec, "x")).rejects.toThrow(new WakeError("general-x-1234 is not running (the session has ended)"));
+    await expect(rt.wake(rec, "x", await rt.listing())).rejects.toThrow(new WakeError("general-x-1234 is not running (the session has ended)"));
+  });
+
   it("keeps an ended session stopped when nothing runs under its short id", async () => {
     const store = new RecordStore(sessionsDir(env));
     await store.updateInside("claude", SID, { pid: 4242, status: "idle", data: { shortId: SHORT } });
@@ -277,7 +388,7 @@ describe("on Porch's Claude adapter, with canned listings", () => {
       await store.updateInside("claude", SID, { status: "ended", endedAt: T2, endReason: reason });
       const st = await setup([row({ pid: null })]).status(rec);
       expect(st).toEqual({ alive: false, busy: null, pid: null, prompt: null, activity: null,
-        turns: { last_prompt_at: null, last_stop_at: null }, stopped: { status: "ended", reason } });
+        turns: { last_prompt_at: null, last_stop_at: null }, stopped: { source: "Porch", status: "ended", reason } });
       fs.rmSync(store.recordPath("claude", SID));
     }
   });

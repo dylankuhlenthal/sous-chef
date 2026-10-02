@@ -67,8 +67,12 @@ export interface Turns {
   last_stop_at: number | null;
 }
 
-/** How the runtime sees a stopped session: its status word, and the reason it gives (null: none). */
+/**
+ * How the runtime sees a stopped session: who says so (the name the watcher's `gone` event
+ * gives, for example "Porch"), its status word, and the reason it gives (null: none).
+ */
 export interface Stopped {
+  source: string;
   status: string;
   reason: string | null;
 }
@@ -111,7 +115,8 @@ export interface Runtime {
   /**
    * Optional: tell the tool the state the session just reported (`sc report`), for a
    * runtime whose tool keeps such a status. Called after the event is written and sous
-   * chef is woken; a failure is printed as one line and changes nothing else.
+   * chef is woken. A failure throws an Error whose message is the whole line to print, in
+   * the runtime's own words (`sc report` prints it on stderr and changes nothing else).
    */
   reportStatus?(rec: Dict, state: string, text: string): Promise<void>;
   /**

@@ -105,6 +105,59 @@ describe("the launchers", () => {
     expect(run("sc", "--help").code).toBe(0);
   });
 
+  /** `npm run build` in the copy, as after a checkout; the dependencies are the checkout's own, linked. */
+  function rebuild(): void {
+    fs.cpSync(path.join(ROOT, "scripts"), path.join(core, "scripts"), { recursive: true, preserveTimestamps: true });
+    const r = spawnSync("npm", ["run", "build"], { cwd: core, encoding: "utf8", timeout: 120_000 });
+    if (r.status !== 0) throw new Error(`npm run build failed: ${r.stdout}${r.stderr}`);
+  }
+
+  it("run after a rebuild when package-lock.json only has a newer time, as after a checkout", () => {
+    touchLater("package-lock.json");
+    rebuild();
+    const stamp = JSON.parse(fs.readFileSync(path.join(core, "dist", ".build-stamp"), "utf8")) as { lock: string | null };
+    expect(stamp.lock).toMatch(/^[0-9a-f]{40}$/);
+    expect(run("sc", "--help").code).toBe(0);
+  }, 180_000);
+
+  it("refuse after a rebuild when package-lock.json changed and npm ci has not run", () => {
+    const lockFile = path.join(core, "package-lock.json");
+    const lock = JSON.parse(fs.readFileSync(lockFile, "utf8")) as { packages: Record<string, { version: string }> };
+    lock.packages["node_modules/proper-lockfile"]!.version = "4.1.1";
+    fs.writeFileSync(lockFile, JSON.stringify(lock, null, 2) + "\n");
+    touchLater("package-lock.json");
+    rebuild();
+    const r = run("sc", "--help");
+    expect(r.code).toBe(1);
+    expect(r.stderr).toBe(`sc: the dependencies in ${core}/node_modules are older than package-lock.json; ` +
+      `run: cd ${core} && npm ci && npm run build\n`);
+  }, 180_000);
+
+  it("refuse after a rebuild when a root dependency was added to package-lock.json, optional or not, and npm ci has not run", () => {
+    const lockFile = path.join(core, "package-lock.json");
+    const original = fs.readFileSync(lockFile, "utf8");
+    type Lock = { packages: Record<string, Record<string, unknown>> };
+    const refusal = `sc: the dependencies in ${core}/node_modules are older than package-lock.json; ` +
+      `run: cd ${core} && npm ci && npm run build\n`;
+    // An optional dependency this machine would install, with its package entry.
+    const optional = JSON.parse(original) as Lock;
+    optional.packages[""]!.optionalDependencies = { "left-pad": "^1.3.0" };
+    optional.packages["node_modules/left-pad"] = { version: "1.3.0", optional: true, license: "WTFPL",
+      resolved: "https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz",
+      integrity: "sha512-XI5MPzVNApjAyhQzphX8BkmKsKUxD4LdyK24iZeQEXQo6fh7Ri78DaaM7ffbOBR95ebdC7/QTGv8JC0nIHhjJw==" };
+    fs.writeFileSync(lockFile, JSON.stringify(optional, null, 2) + "\n");
+    touchLater("package-lock.json");
+    rebuild();
+    expect(run("sc", "--help").stderr).toBe(refusal);
+    // Only the root entry names it (the dependency is already installed elsewhere in the tree).
+    const rootOnly = JSON.parse(original) as Lock;
+    rootOnly.packages[""]!.devDependencies = { ...(rootOnly.packages[""]!.devDependencies as object), "no-such-dep": "^1.0.0" };
+    fs.writeFileSync(lockFile, JSON.stringify(rootOnly, null, 2) + "\n");
+    touchLater("package-lock.json");
+    rebuild();
+    expect(run("sc", "--help").stderr).toBe(refusal);
+  }, 240_000);
+
   it("say what is wrong to sous chef at hook chef-start, exiting 0", () => {
     fs.rmSync(path.join(core, "dist", ".build-stamp"));
     const r = run("sc", "hook", "chef-start");

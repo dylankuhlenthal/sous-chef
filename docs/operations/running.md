@@ -36,7 +36,7 @@ Sessions do not need `sc` on `PATH`: their brief gives its full path.
 
 - no `dist/`, or no `dist/.build-stamp` (the last step of a build, so a build that did not finish has none): `run: cd <core> && npm ci && npm run build`;
 - a file under `src/`, or `tsconfig.json` or `tsconfig.build.json`, newer than the build and with different content from what the build recorded in the stamp: `run: cd <core> && npm run build`;
-- `node_modules/.package-lock.json` missing, or older than a changed `package-lock.json`: `run: cd <core> && npm ci && npm run build`.
+- `node_modules/.package-lock.json` missing, or older than a changed `package-lock.json`: `run: cd <core> && npm ci && npm run build`. "Changed" means its content differs from what the build recorded. A build records the lock file's hash when the installed dependencies match it: when `node_modules/.package-lock.json` (npm's record of what is installed) is newer than it, or, when older, names the same packages with the same entries and has every dependency the lock file's root entry declares (`installedMatches` in `scripts/build-stamp.js`). So a checkout that rewrites `package-lock.json` with the same content, followed by a build, is not refused; one whose content really changed is, until `npm ci` runs (decision 0029, the build vouches for a lock file the installed dependencies match).
 
 At sous chef's startup hook the same text reaches sous chef as its startup context instead, so it can tell you. While the build is stale every other hook fails with the same text instead of running, including the one that blocks edits under `state/`, so those edits are not blocked. Why it works this way: decision 0023 (compiled into `dist/`, refused when stale).
 
@@ -198,7 +198,7 @@ SC_UNDER_TEST=<code root> PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover
 
 The tests come from this checkout and the `sc` from the code root. Tests marked Python-only (the Python sc's internals) are skipped when that `sc` is not the Python one; `AGENTS.md` ("Testing") says how this is decided.
 
-`npx vitest run` runs the TypeScript unit tests in `tests/*.test.ts`; the launcher tests need a build. The Python behaviour tests above stay the gate for behaviour until they are ported (TRV-1157).
+`npx vitest run` runs the TypeScript unit tests in `tests/*.test.ts` (`AGENTS.md`, "Testing", lists what they cover). Three of them run the built code and fail without a build: the launcher tests, the `install.sh` tests and the closed-output test (`tests/launcher.test.ts`, `tests/install.test.ts`, `tests/closed-output.test.ts`); the rest run `src/` directly. The Python behaviour tests above stay the gate for behaviour until they are ported (TRV-1157).
 
 The captured-output tests (`tests/test_captured.py`) compare output word for word with the files in `tests/captured/`, with paths, session ids and the fake relay's port replaced by placeholders. After a deliberate change to that output, run the suite with `SC_UPDATE_CAPTURED=1` to rewrite the files, and check their diff: it is the list of what changed for the owner.
 

@@ -30,8 +30,10 @@ export function setOwner(name: string, branchPrefix: string): Owner | null {
   return owner();
 }
 
-// Hook commands run Node by its absolute path, then sc by its absolute path (decision 12):
-// a hook may not get the terminal's PATH, and Node here usually comes from nvm or Homebrew.
+// Hook commands run Node by its absolute path, then sc by its absolute path: a hook may not
+// get the terminal's PATH, and Node here usually comes from nvm or Homebrew. The hooks that
+// still find Node through PATH: docs/operations/running.md, "Known limit: hooks find Node
+// through PATH".
 function hook(name: string, sid: string): Dict {
   const cmd = `${shellQuote(process.execPath)} ${shellQuote(scBin())} hook ${name} --session ${shellQuote(sid)}`;
   return { hooks: [{ type: "command", command: cmd, timeout: 30 }] };
@@ -294,12 +296,13 @@ export async function report(state: string, text: string, key: string | null = n
   }
   // Best effort: a runtime that keeps a status of its own (the Claude runtime: Porch's self
   // status) is told too. The event above is the record; this never changes the outcome.
+  // A failure's message is the runtime's own line.
   const rt = runtimes.get(rec.runtime);
   if (rt.reportStatus) {
     try {
       await rt.reportStatus(rec, state, text);
     } catch (e) {
-      printErr(`porch status not updated: ${e instanceof Error ? e.message : String(e)}`);
+      printErr(e instanceof Error ? e.message : String(e));
     }
   }
   return event;

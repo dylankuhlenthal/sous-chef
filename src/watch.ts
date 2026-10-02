@@ -447,12 +447,14 @@ function quietSince(lastStop: number | null, flying: number, seenAt: number | nu
 
 /**
  * What the runtime says about a stopped session, as a sentence (with a leading space) for
- * the `gone` event, or "" when it says nothing. Text only: no decision reads it, and an
- * `ended` session is never taken to mean sous chef stopped it (rec.stopped_by_sc says that).
+ * the `gone` event, or "" when it says nothing. The runtime names who says it (the Claude
+ * runtime: Porch). Text only: no decision reads it, and an `ended` session is never taken
+ * to mean sous chef stopped it (rec.stopped_by_sc says that).
  */
 function stoppedSentence(st: Status): string {
   if (!st.stopped) return "";
-  return ` Porch reports it as ${st.stopped.status}${st.stopped.reason ? ` (${st.stopped.reason})` : ""}.`;
+  const { source, status, reason } = st.stopped;
+  return ` ${source} reports it as ${status}${reason ? ` (${reason})` : ""}.`;
 }
 
 /**

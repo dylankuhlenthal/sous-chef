@@ -68,8 +68,9 @@ export function permissionMode(rec: Dict): string {
 }
 
 // The hook commands Porch's own hooks replace for a session launched through Porch: they
-// record turn times in turns.json, which Porch's record now holds (decision 10 of the
-// rewrite). The commands stay in sc for sessions launched before the switch-over.
+// record turn times in turns.json, which Porch's record now holds. The commands stay in sc
+// for sessions launched before the switch-over: Claude Code keeps a session's launch
+// settings across resume, so such a session calls them for the rest of its life.
 const OLD_TURN_HOOKS = [" hook worker-prompt ", " hook worker-stop "];
 
 /** `settings` without the UserPromptSubmit and Stop entries that run `sc hook worker-prompt`/`worker-stop`. */
@@ -133,8 +134,11 @@ function activityOf(value: unknown): Activity | null {
     in_flight: typeof a.inFlight === "number" ? a.inFlight : null, running };
 }
 
+/** Who the watcher's `gone` event says reported a stopped session (Status.stopped.source). */
+const SOURCE = "Porch";
+
 const NOT_FOUND: Status = { alive: false, busy: null, pid: null, prompt: null, activity: null,
-  stopped: { status: "not found", reason: null } };
+  stopped: { source: SOURCE, status: "not found", reason: null } };
 
 /**
  * A Porch observation as sous chef's Status (null: Porch does not know the session).
@@ -151,7 +155,7 @@ export function statusOf(obs: Observation | null | undefined): Status {
     ? { last_prompt_at: seconds(detail.lastTurnStart), last_stop_at: seconds(detail.lastTurnEnd) } : undefined;
   if (notRunning(obs.status)) {
     return { alive: false, busy: null, pid: null, prompt: null, activity: null, ...(turns ? { turns } : {}),
-      stopped: { status: obs.status, reason: obs.endReason } };
+      stopped: { source: SOURCE, status: obs.status, reason: obs.endReason } };
   }
   let prompt: string | null = null;
   if (obs.status === "waiting-on-prompt") {
@@ -238,6 +242,31 @@ export function createClaudeRuntime(options: ClaudeRuntimeOptions = {}): Runtime
   }
 
   /**
+   * The observation of the session a record names, for both `status` and `wake`, so the two
+   * always agree (null: Porch knows neither id).
+   *
+   * By session id first, then by short id when that session is not running. After `/clear`
+   * Claude Code goes on in the same process under a new session id, and Porch shows the old
+   * id as ended (reason `clear`) while the short id is still running, as the Python runtime
+   * read it. A stopped session with nothing running under its short id stays stopped.
+   */
+  async function resolve(rec: Dict, rows: Listing | null | undefined): Promise<Observation | null> {
+    const handle = or(rec.handle, {}) as Dict;
+    const sid = typeof handle.session_id === "string" && handle.session_id ? handle.session_id : null;
+    const short = typeof handle.short_id === "string" && handle.short_id ? handle.short_id : null;
+    const running = (obs: Observation | null) => obs !== null && !notRunning(obs.status);
+    if (rows) {
+      const bySid = lookup(rows, sid);
+      const byShort = lookup(rows, short);
+      return running(bySid) || !running(byShort) ? (bySid ?? byShort) : byShort;
+    }
+    const bySid = sid ? await observe(sid) : null;
+    if (running(bySid) || !short) return bySid;
+    const byShort = await observe(short);
+    return running(byShort) ? byShort : (bySid ?? byShort);
+  }
+
+  /**
    * Run Claude Code (`command` is the launch plan's for a launch). `shown` names the
    * command in a timeout message: a launch's arguments start with the whole settings JSON.
    */
@@ -299,24 +328,7 @@ export function createClaudeRuntime(options: ClaudeRuntimeOptions = {}): Runtime
     },
 
     async status(rec, rows) {
-      const handle = or(rec.handle, {}) as Dict;
-      // By session id first, then by short id when that session is not running. After
-      // `/clear` Claude Code goes on in the same process under a new session id, and Porch
-      // shows the old id as ended (reason `clear`) while the short id is still running, as
-      // the Python runtime read it. A stopped session with nothing running under its short
-      // id stays stopped.
-      const sid = typeof handle.session_id === "string" && handle.session_id ? handle.session_id : null;
-      const short = typeof handle.short_id === "string" && handle.short_id ? handle.short_id : null;
-      const running = (obs: Observation | null) => obs !== null && !notRunning(obs.status);
-      if (rows) {
-        const bySid = lookup(rows, sid);
-        const byShort = lookup(rows, short);
-        return statusOf(running(bySid) || !running(byShort) ? (bySid ?? byShort) : byShort);
-      }
-      const bySid = sid ? await observe(sid) : null;
-      if (running(bySid) || !short) return statusOf(bySid);
-      const byShort = await observe(short);
-      return statusOf(running(byShort) ? byShort : (bySid ?? byShort));
+      return statusOf(await resolve(rec, rows));
     },
 
     async launch(rec, prompt, env, settings) {
@@ -372,14 +384,40 @@ export function createClaudeRuntime(options: ClaudeRuntimeOptions = {}): Runtime
       throw new SCError(`${rec.id as string} is still running after two stop attempts`);
     },
 
-    async wake(rec, text) {
+    async wake(rec, text, rows) {
       const handle = or(rec.handle, {}) as Dict;
-      const id = or(handle.session_id, handle.short_id);
-      if (typeof id !== "string" || !id) throw new WakeError(`${rec.id as string} is not running (no runtime handle)`);
-      const failed = await deliver(id, text);
+      const recorded = or(handle.session_id, handle.short_id);
+      if (typeof recorded !== "string" || !recorded) {
+        throw new WakeError(`${rec.id as string} is not running (no runtime handle)`);
+      }
+      // Deliver to the session `status` resolves to: after `/clear` that is the new session
+      // id running under the same short id, not the recorded one, which Porch shows as ended.
+      // A session that is not running keeps the recorded id, so the reason Porch gives is
+      // unchanged. Porch's deliver reads `claude agents` twice on its own, so without the
+      // caller's rows the recorded id is tried first and a listing is read only when Porch
+      // says it is not running (rare: after `/clear`, or a session that really stopped).
+      const running = (obs: Observation | null) => (obs && !notRunning(obs.status) ? obs.session : null);
+      const lookUp = async (listing: Listing | null | undefined) => {
+        try {
+          return running(await resolve(rec, listing ?? await this.listing()));
+        } catch (e) {
+          throw new WakeError(message(e));
+        }
+      };
+      const fail = ([stopped, reason]: [boolean, string]) =>
+        new WakeError(stopped ? `${rec.id as string} is not running (${reason})` : reason);
+      if (rows) {
+        const failed = await deliver((await lookUp(rows)) ?? recorded, text);
+        if (failed !== null) throw fail(failed);
+        return;
+      }
+      const failed = await deliver(recorded, text);
       if (failed === null) return;
-      const [stopped, reason] = failed;
-      throw new WakeError(stopped ? `${rec.id as string} is not running (${reason})` : reason);
+      if (!failed[0]) throw fail(failed);
+      const other = await lookUp(null);
+      if (other === null || other === recorded) throw fail(failed);
+      const again = await deliver(other, text);
+      if (again !== null) throw fail(again);
     },
 
     async statusSessionId(sessionId, rows) {
@@ -397,7 +435,11 @@ export function createClaudeRuntime(options: ClaudeRuntimeOptions = {}): Runtime
     async reportStatus(_rec, state, text) {
       const mapped = Object.hasOwn(SELF_STATUS, state) ? SELF_STATUS[state] : null;
       if (!mapped) return;
-      await porch().statusSet(mapped, text);
+      try {
+        await porch().statusSet(mapped, text);
+      } catch (e) {
+        throw new Error(`porch status not updated: ${message(e)}`);
+      }
     },
 
     async startNamed(name, prompt, cwd, env, permissions) {
