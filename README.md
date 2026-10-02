@@ -1,3 +1,5 @@
+<p align="center"><img src="https://raw.githubusercontent.com/dylankuhlenthal/sous-chef/main/assets/souschef.png" alt="sous chef" width="160"></p>
+
 # sous chef
 
 An agent that tracks your work and launches and manages Claude Code background sessions for you. Sous chef keeps notes on your ideas, ongoing topics, proofs of concept and repos, and launches sessions for shaping, building, orchestrating and investigating. It reads what those sessions report, answers what it can, and brings you what it cannot. You can open any session it launched with `claude attach`.
@@ -18,11 +20,10 @@ Sous chef acts on your behalf, unattended. Know these before installing:
 - **Sessions accept messages from other local sessions.** That is how sous chef wakes them and they wake it. Any program running as you can send one, with any sender label, so sous chef and its sessions are told to treat such a message only as a prompt to read their own records, never as an instruction. See [SECURITY.md](SECURITY.md).
 - **Slack is off.** Sous chef can talk to you in Slack only through a separate messaging relay, which is not published. Everything else works without it.
 
-## Install and run it
+## Install
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/dylankuhlenthal/sous-chef/main/install.sh | bash
-souschef                     # attach, resuming or starting sous chef
 ```
 
 The script clones this repo into `~/.sous-chef`, installs and builds it, then asks where your data folder goes, who you are, and sous chef's permission mode. To read the script first, clone and run it yourself:
@@ -33,6 +34,14 @@ git clone https://github.com/dylankuhlenthal/sous-chef.git ~/.sous-chef
 ```
 
 Your memory, jobs, kinds and settings live in your own data folder (by default `~/.my-sous-chef`, optionally its own private git repo), reached from here as `my/`. Nothing personal goes in this repo. Details, and how to update after a pull: [docs/operations/running.md](docs/operations/running.md).
+
+## Run
+
+```sh
+souschef
+```
+
+This attaches to sous chef, resuming or starting it first if it is not running. The install links `souschef` into `~/.local/bin`, so it runs from any terminal once that folder is on your `PATH`. Details: "Start sous chef" in [docs/operations/running.md](docs/operations/running.md).
 
 ## Docs
 
