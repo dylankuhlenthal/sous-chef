@@ -40,8 +40,11 @@ afterEach(() => {
   fs.rmSync(tmp, { recursive: true, force: true });
 });
 
-const T1 = "2026-10-01T10:00:00.000Z";
-const T2 = "2026-10-01T10:05:30.500Z";
+// Turn and end times an hour before the run, not fixed dates: Porch prunes an ended record
+// 24 hours after it ended (STOPPED_RECORD_TTL_MS), so a fixed date stops being "ended" a day later.
+const BASE_MS = (Math.floor(Date.now() / 1000) - 3600) * 1000;
+const T1 = new Date(BASE_MS).toISOString();
+const T2 = new Date(BASE_MS + 330_500).toISOString();
 const secs = (iso: string) => Date.parse(iso) / 1000;
 
 // --- 1. Porch's fake adapter: the harness-neutral parts ---------------------------------
