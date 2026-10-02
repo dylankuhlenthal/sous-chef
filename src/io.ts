@@ -17,6 +17,24 @@ export function stdinIsTty(): boolean {
   return Boolean(process.stdin.isTTY);
 }
 
+/**
+ * Stay quiet when whoever reads sc's output stops reading early (`sc status <id> | head`).
+ * Writing to a closed pipe fails with EPIPE, which Node reports as an 'error' event on
+ * process.stdout or process.stderr, and an unhandled one prints a stack trace and exits 1.
+ * The Python sc printed nothing and exited 0 in that case, since output that fits in the
+ * pipe was written before the reader left. So the error is ignored, the rest of the output
+ * goes nowhere, and the command finishes and exits as it would have. Any other error on
+ * these streams is thrown as before.
+ */
+export function ignoreClosedOutput(): void {
+  for (const stream of [process.stdout, process.stderr]) {
+    stream.on("error", (e: NodeJS.ErrnoException) => {
+      if (e.code === "EPIPE" || e.code === "ERR_STREAM_DESTROYED") return;
+      throw e;
+    });
+  }
+}
+
 /** print(): the text and a newline, on stdout. */
 export function print(text = ""): void {
   process.stdout.write(text + "\n");
