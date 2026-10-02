@@ -67,7 +67,7 @@ Sous chef has no inbox. Its durable input is the event logs it reads with `sc ev
 
 - `sc events` lists it under `[cron]`, and `sc events ack cron:<n>` marks it read.
 - `due` is in `events.WAKE_STATES`, so the startup summary counts it as needing attention.
-- The watcher wakes sous chef for it (step 5 in `docs/domains/watcher.md`), but only while sous chef is idle. Unlike a session's report, the firing itself wakes nobody, so the watcher's first wake comes straight away rather than after the retry delay, and it then retries with the same back-off as for sessions until the event is acknowledged.
+- The watcher wakes sous chef for it (check 7, "Unread cron events", in `docs/domains/watcher.md`), but only while sous chef is idle. Unlike a session's report, the firing itself wakes nobody, so the watcher's first wake comes straight away rather than after the retry delay, and it then retries with the same back-off as for sessions until the event is acknowledged.
 
 The event is on disk before anyone is woken, so a job survives sous chef being stopped, restarted or compacted: it waits in the cron log until it is acknowledged.
 
@@ -75,7 +75,7 @@ The event is on disk before anyone is woken, so a job survives sous chef being s
 
 A launched session's record carries `cron: {"job": <name>}`, and its brief gets `templates/cron-worker.md` added after the task, which tells it the run was scheduled, how to report when it finds nothing, and that a later run may arrive in its inbox.
 
-A message queued to a session still on its previous run is sent with `ops.send(..., only_if_idle=True)`, from `cron job <name>`. The watcher's existing inbox check wakes the session once it is idle and the message is older than `SC_INBOX_GRACE`, and reports `inbox-unread` to sous chef if it is never picked up.
+A message queued to a session still on its previous run is sent with `ops.send(..., { sender: "cron job <name>", onlyIfIdle: true })`. The watcher's existing inbox check wakes the session once it is idle and the message is older than `SC_INBOX_GRACE`, and reports `inbox-unread` to sous chef if it is never picked up.
 
 The session's own reports follow the usual rules: its `done`, questions and failures wake sous chef, and `sc events` shows which cron job it belongs to.
 
