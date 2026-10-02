@@ -1,0 +1,33 @@
+{
+  "name": "sous-chef",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Sous chef: memory and session manager for Claude Code sessions.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "//build": "Compile TypeScript from src/ into dist/, then write dist/.build-stamp (scripts/build-stamp.js), which exists only after a complete build. bin/sc refuses to run a missing or stale build (docs/decisions/0023).",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json && node scripts/build-stamp.js",
+    "//typecheck": "Type-check src/ and tests/ without writing output.",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "//lint": "ESLint over the given files, or the whole repo with no arguments.",
+    "lint": "eslint",
+    "//test": "Build, then the TypeScript unit tests (vitest), then the behaviour suite (Python, until it is ported to vitest).",
+    "test": "npm run build && vitest run && PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests"
+  },
+  "dependencies": {
+    "@dylankuhlenthal/porch": "github:dylankuhlenthal/porch#v0.1.0",
+    "proper-lockfile": "^4.1.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "@types/node": "^22.20.4",
+    "@types/proper-lockfile": "^4.1.4",
+    "eslint": "^9.39.5",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.71.0",
+    "vitest": "^5.0.2"
+  }
+}

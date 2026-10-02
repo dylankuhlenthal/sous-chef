@@ -1462,7 +1462,7 @@ class PromptWatcherTests(ScTestCase):
 class RunningWatcherTestCase(ScTestCase):
     """Starts real watcher processes (no Claude sessions) from a copy of the code under test, and
     stops them afterwards. A test never takes the watcher's lock itself: how the lock is held
-    differs by language (TRV-1143 decision 13), so a test that needs a running watcher starts one."""
+    differs by language (decision 0024, locks through proper-lockfile), so a test that needs a running watcher starts one."""
 
     def setUp(self):
         super().setUp()
@@ -1523,7 +1523,8 @@ class WatcherCodeTests(RunningWatcherTestCase):
         self.assertTrue(self.wait_for(lambda: self.code_record().get("code") not in (None, before)),
                         (self.state / "watch.log").read_text())
         # One watcher runs: the one that recorded the new code. It may have replaced itself in
-        # place (same pid) or started a new process and exited (TRV-1143 decision 12).
+        # place (same pid, as the Python sc did) or started a new process and exited (as the TypeScript
+        # sc does: docs/domains/watcher.md, "The watcher restarts itself").
         pid = self.pid()
         self.assertEqual(self.code_record()["pid"], pid)
         self.assertTrue(self.alive(pid))

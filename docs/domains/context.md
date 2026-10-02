@@ -4,7 +4,7 @@ Sous chef runs in one long Claude Code session. When its context fills, Claude C
 
 At the end of every sous chef turn, a Stop hook reads how full the context is. Past a configured percentage of the model's context window, it writes one warning into the context log, which sous chef reads with `sc events`. The warning never wakes sous chef.
 
-Code: `lib/sc/context.py` (`read_usage`, `find_transcript`, `on_stop`, `status_lines`, `set_config`), `lib/sc/hooks.py` (`chef_stop`), `lib/sc/events.py` (`CONTEXT_LOG`, `CHEF_LOGS`), `lib/sc/cli.py` (`cmd_context`, `cmd_events`), `lib/sc/summary.py` (`build`), `.agents/settings.json` (the Stop hook).
+Code: `src/context.ts` (`readUsage`, `findTranscript`, `onStop`, `statusLines`, `setConfig`), `src/hooks.ts` (`chefStop`), `src/events.ts` (`CONTEXT_LOG`, `CHEF_LOGS`), `src/cli.ts` (`cmdContext`, `cmdEvents`), `src/summary.ts` (`build`), `.agents/settings.json` (the Stop hook).
 
 Paths such as `state/...`, `memory/...` and `context.json` in this doc are in the owner's data folder, which the core reaches as `my/` (`docs/architecture.md`, "Two folders joined by one link").
 
@@ -16,7 +16,7 @@ Claude Code does not publish how full a session's context is. It can be read fro
 - Every assistant line (`"type": "assistant"`) has `message.usage`, the API usage of the call that produced it, and `message.model`.
 - The prompt that call sent is the whole context at that point: `input_tokens + cache_creation_input_tokens + cache_read_input_tokens`. `output_tokens` is left out; it becomes part of the next call's prompt.
 
-`context.read_usage` reads the file backwards from the end, a megabyte at a time, and stops at the first line that settles the answer, so the cost does not grow with the file (sous chef's was 5.4 MB, read in about 50 ms). Going backwards it:
+`context.readUsage` reads the file backwards from the end, a megabyte at a time, and stops at the first line that settles the answer, so the cost does not grow with the file (sous chef's was 5.4 MB, read in about 50 ms). Going backwards it:
 
 - skips lines that are not JSON (a line still being written), subagent lines (`isSidechain`), and messages Claude Code makes up itself (`model` `<synthetic>`, all-zero usage, for example an API error notice);
 - returns "compacted" if it meets a compaction marker (`"subtype": "compact_boundary"`) before any assistant line, because no turn has run since;
@@ -24,7 +24,7 @@ Claude Code does not publish how full a session's context is. It can be read fro
 
 It fails too when the file is missing, or when 32 MB from the end hold no assistant line.
 
-`find_transcript` uses the payload's `transcript_path`, and without it looks for `~/.claude/projects/*/<session id>.jsonl`, so it does not depend on how Claude Code names project folders.
+`findTranscript` uses the payload's `transcript_path`, and without it looks for `~/.claude/projects/*/<session id>.jsonl`, so it does not depend on how Claude Code names project folders.
 
 ## Configuration
 
@@ -50,7 +50,7 @@ The `context-high` event gives the percentage, the tokens and the window, and as
 
 ## How it fails
 
-A hook must never break its session, so `on_stop` does not raise. The failure to guard against is the quiet one: the reader finds nothing, no warning is written, and sous chef assumes it is being watched. So every way of not getting a trusted number is a failure, and failures are reported:
+A hook must never break its session, so `onStop` does not throw. The failure to guard against is the quiet one: the reader finds nothing, no warning is written, and sous chef assumes it is being watched. So every way of not getting a trusted number is a failure, and failures are reported:
 
 - The first failed check of a streak writes a `context-unreadable` event with the reason, telling sous chef that nothing will warn it and to keep `memory/` current as it goes. Later failures in the same streak only update the count, so a broken reader does not write an event every turn.
 - The next successful check writes `context-readable`, so the earlier event is not left standing.
@@ -75,7 +75,7 @@ Only the registered sous chef session is checked (`chef.current()`). Every sessi
 ## Known limits
 
 - **Sous chef sees a warning only when it next runs `sc events`**, or at its next start or compaction. It runs `sc events` on every wake-up from a session or a job, but during a long conversation with the owner and no wake-ups it may not look before the compaction. The way to lift this is a UserPromptSubmit hook for sous chef that adds unread context warnings to the next turn's context, which shows them without waking anyone.
-- **The transcript format is undocumented** and could change in any Claude Code release. The reader fails loudly rather than guessing, as above; a change means updating `read_usage`.
+- **The transcript format is undocumented** and could change in any Claude Code release. The reader fails loudly rather than guessing, as above; a change means updating `readUsage`.
 - **Nothing warns while sous chef is not running a turn**, since the check runs at the end of turns. Context only grows during a turn, so nothing is missed between them.
 
 ## Verification

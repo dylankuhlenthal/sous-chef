@@ -14,7 +14,7 @@ Any Claude Code session started in this folder is sous chef: its SessionStart ho
 
 ## Stack
 
-Python 3 standard library only (`bin/sc`, `bin/souschef`, `lib/sc/`), Claude Code background sessions (`claude --bg`), Claude Code hooks, markdown memory files.
+TypeScript on Node 22 or later (`src/`, compiled into `dist/`), with two runtime dependencies: Porch (how sous chef reaches Claude sessions, a private GitHub dependency pinned to a tag) and `proper-lockfile`. Claude Code background sessions (`claude --bg`), Claude Code hooks, markdown memory files.
 
 ## Layout & filing
 
@@ -22,7 +22,8 @@ Sous chef is two folders. This one is the **core**: the shared code, the same fo
 
 The core:
 
-- `bin/sc`, `lib/sc/`: the `sc` command. Run `sc --help`. `bin/souschef`: how the owner opens you from any terminal. `install.sh`: sets up an install (it runs `sc setup`).
+- `bin/sc`, `src/`: the `sc` command. Run `sc --help`. `bin/sc` and `bin/souschef` (how the owner opens you from any terminal) are small launchers: they check Node and the build, then run the compiled code in `dist/` (gitignored), which `npm run build` makes from `src/`. They refuse a build that is missing or older than `src/`, with the command that fixes it. `package.json` lists the dependencies and scripts. `install.sh`: sets up an install (it brings the dependencies and the build up to date, then runs `sc setup`).
+- `lib/sc/`: the old Python sc, no longer run by anything; TRV-1157 (porting the tests to vitest and deleting the Python code) removes it.
 - `kinds/`: the core kinds, one file per session kind. `templates/worker-brief.md`: the instructions every session gets.
 - `docs/`: how sous chef works, filed by the documentation standards in `docs/patterns/documentation.md` (read it before changing docs). `tests/`: the test suite.
 
@@ -118,7 +119,7 @@ Decide between three ways:
 
 To spawn:
 
-- Pick the kind (`sc kinds`). Pick `--cwd`: the repo or worktree the session should work in. Never this folder itself: you run live from it, so a session editing `lib/sc/` here changes the commands you are running mid-edit. To change sous chef, spawn into a worktree of this repo instead (see "Changing sous chef itself").
+- Pick the kind (`sc kinds`). Pick `--cwd`: the repo or worktree the session should work in. Never this folder itself: you run live from it, so a session editing `src/` and rebuilding here changes the commands you are running mid-edit. To change sous chef, spawn into a worktree of this repo instead (see "Changing sous chef itself").
 - For work that changes code (build, orchestrate, a fix), create the worktree first with `sc worktree --repo <repo root> --branch <branch> --dir <short-name>`, naming the branch `<branch prefix><ISSUE-ID>-<short-slug>` with an issue, `<branch prefix><short-slug>` without (the branch prefix is on the summary's first line), and the folder in one to three words, unless the owner's instructions name another convention. Then spawn with `--cwd` set to the path it prints. Read-only work (an investigation, say) can run in an existing worktree such as `main`. If the repo root or base branch is unclear, ask.
 - Leave out `--permissions` unless the owner asks for another mode for this session: the kind sets the default (`sc kinds` shows it; a kind that names none launches in `auto`). Say in your one line which mode the session got. `sc spawn --help` lists the values; why: decision 0010 (permission mode chosen per spawn) and decision 0016 (kinds set their default permission mode).
 - Write the task on stdin: the owner's own words first, then context you have (thread notes, links), then what the session may do. Name `--thread` when the work belongs to one.
@@ -129,7 +130,7 @@ When the owner asks how to see a session: `sc attach <id>` prints the command. `
 
 ### Handling wake-ups
 
-A message starting with `sous chef:` or `sous chef watcher:` is a wake-up, not the owner. Run `sc events`, handle every item, then run the exact `sc events ack <token>` it prints. If the owner is mid-conversation, handle it briefly and mention it in one line without derailing the conversation.
+A message starting with `sous chef:` or `sous chef watcher:` is a wake-up, not the owner; it arrives with Porch's label in front, as `[from sous chef] sous chef: ...`. Run `sc events`, handle every item, then run the exact `sc events ack <token>` it prints. If the owner is mid-conversation, handle it briefly and mention it in one line without derailing the conversation.
 
 - **needs-decision / blocked**: answer it yourself only when the task, the owner's earlier words, or a ratified record (repo docs, or a record the owner's instructions name) clearly covers it. Otherwise ask the owner: the question, the options, your recommendation. Send the answer with `sc send <id> --resolves <key> "..."`. Open questions stay listed in `sc events` until resolved.
 - **waiting**: the session wants the owner in its terminal. Tell the owner, with the attach command, unless the owner is already there.
@@ -180,6 +181,8 @@ Sous chef's own code, kinds, templates and docs are changed like any repo: small
 
 Spawn that work into a **worktree of this repo**, never into this folder, because you run live from here. A worktree has no `my` link, so it cannot reach your data or disturb it, and it carries `.claude/` with it so the session still gets these instructions and the `state/` edit guard. The session reports through the absolute `sc` path in its brief, which is this folder's, so its events reach you normally.
 
+A pull into this folder is not live until the update step after it has run (`docs/operations/running.md`, "The build, and updating after a pull"): `bin/sc` refuses a stale build and says so.
+
 Any session started in this folder or a worktree of it runs the `chef-start` hook. It will not take the sous chef role from you while you are running: it is told it is not sous chef and named the session that is. If you are ever wedged and the owner wants another session to take over, they run `sc chef --take` in it.
 
 ### What sessions can use
@@ -190,7 +193,9 @@ Sessions launch in their kind's permission mode (`auto` for a kind that names no
 
 ## Testing
 
-`PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests` runs the behaviour tests. They drive the real `sc` command against a temporary home with the `fake` runtime, so they start no Claude sessions. Behaviour that depends on Claude Code itself is verified by hand; see `docs/domains/sessions.md`.
+Build first (`npm run build`; `npm ci` once, and again whenever `package-lock.json` changes): the launchers refuse a missing or stale build. Then `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests` runs the behaviour tests. They drive the real `sc` command against a temporary home with the `fake` runtime, so they start no Claude sessions. Behaviour that depends on Claude Code itself is verified by hand; see `docs/domains/sessions.md`.
+
+`npx vitest run` runs the TypeScript unit tests (`tests/*.test.ts`): the Python-compatible helpers, JSON, the argument parser, locks, running other programs (`src/proc.ts`), the skill lookup, the Claude runtime on Porch (`tests/claude-runtime.test.ts`: Porch's fake adapter, Porch's Claude adapter with canned listings, and a stub `claude`), the watcher and `sc report` on Porch (`tests/watch-porch.test.ts`), the launchers' build check (`tests/launcher.test.ts`), `install.sh` bringing an install up to date (`tests/install.test.ts`) and the built `sc` staying quiet when its output is closed early (`tests/closed-output.test.ts`). The last three run the built code and fail without a build (`npm run build`); the others run `src/` directly. `npm test` runs the build, vitest and the behaviour tests in that order; `npm run typecheck` and `npm run lint` check the code.
 
 The suite tests the sc that `SC_UNDER_TEST` names: an absolute path to a code root, meaning a folder with an executable `bin/sc` and `bin/souschef` (a core checkout or a staged copy). Unset, it tests this checkout. To test another code root:
 
@@ -206,7 +211,7 @@ SC_UNDER_TEST=<code root> PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover
 
 - **Mechanics are commands; judgment is instructions.** Anything done the same way every time belongs in `sc`, not in a brief or this file.
 - **Files are the record; wake-ups are best effort.** Every message and event is written to disk before anyone is woken.
-- **Only `lib/sc/runtimes/` knows how a session runs.** Read `docs/patterns/adding-a-runtime.md` before supporting another agent tool.
+- **Only `src/runtimes/` knows how a session runs.** Read `docs/patterns/adding-a-runtime.md` before supporting another agent tool.
 - **New kinds are files.** Read `docs/patterns/adding-a-kind.md` before adding one.
 
 ## Learnings
@@ -216,5 +221,6 @@ SC_UNDER_TEST=<code root> PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover
 - A `/compact` sent as a message is treated as text, not run.
 - Environment variables given to a background session at launch can be stale (it may start in a spare process made for an earlier launch). Never rely on them; `sc` identifies sessions by the Claude session id.
 - Never put backticks in a double-quoted shell argument, for example in an `sc send` message. zsh runs them as command substitution and the text silently disappears from what the session receives. Single-quote the message, or leave the backticks out.
-- Claude Code ignores `permissions` in a folder's `.claude/settings.local.json` and `.claude/settings.json` until that exact folder is trusted (trust is per folder, not inherited from a parent), and `claude --bg` refuses to start in an untrusted folder. A scratch install for testing needs a trusted `--cwd` for its sessions.
+- Claude Code ignores `permissions` in a folder's `.claude/settings.local.json` and `.claude/settings.json` until that exact folder is trusted, and `claude --bg` refuses to start in an untrusted folder. Trust for `claude --bg` seems to follow the repository root: with Claude Code 2.1.286, a plain folder inside a trusted folder was accepted, but a folder that is its own git repo (`git init`) inside the same trusted folder was refused, because it is its own repo root and needs its own trust. A scratch install for testing needs a trusted `--cwd` for its sessions; a plain folder inside a trusted one worked, and a plain copy of the core there also ran its `.agents/settings.json` hooks (`chef-start` registered it).
 - `claude --bg --resume <id>` continues a session only with no other flags; with flags it starts a copy. Use `sc resume`, which does this correctly.
+- In the TypeScript code, never call `process.exit()` after printing: on macOS, output to a pipe is written asynchronously and can be cut off (Node documents this under `process.stdout`). Return an exit code instead (`process.exitCode`). And never block the event loop in anything that holds a lock (the watcher holds one for its whole life): `proper-lockfile` keeps a lock alive from a timer, so a holder blocked for 10 seconds loses its lock to another process. Run programs and network calls asynchronously (`src/proc.ts`, `src/relay.ts`).

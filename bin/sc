@@ -1,10 +1,108 @@
-#!/usr/bin/env python3
-"""Entry point for the sous chef command line. See `sc --help`."""
-import os
-import sys
+#!/usr/bin/env node
+// The sous chef command line (`sc --help`), and through bin/souschef, `souschef`.
+//
+// A launcher, run before anything is compiled: it checks Node and the build, then runs
+// the compiled code in dist/ (docs/decisions/0023). It may be run directly, as
+// `<node> <core>/bin/sc`, or through a link (~/.local/bin/sc); it finds the core from its
+// own real path. Only node: modules, so it works with no dependencies installed.
+import { createHash } from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "lib"))
+const PROGRAM = globalThis.SOUS_CHEF_PROGRAM ?? "sc";
 
-from sc.cli import main  # noqa: E402
+function mtime(p) {
+  try {
+    return fs.statSync(p).mtimeMs;
+  } catch {
+    return null;
+  }
+}
 
-sys.exit(main())
+function sha1(p) {
+  return createHash("sha1").update(fs.readFileSync(p)).digest("hex");
+}
+
+/** Every file under `dir`, as paths relative to the core (`rel` is the folder's). */
+function walk(dir, rel, out) {
+  let entries;
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return out;
+  }
+  for (const e of entries) {
+    const childRel = `${rel}/${e.name}`;
+    if (e.isDirectory()) walk(path.join(dir, e.name), childRel, out);
+    else out.push(childRel);
+  }
+  return out;
+}
+
+/**
+ * Why the build in `core` cannot be run, as the fix, or null. Files that do not exist are
+ * skipped, so a copy of the code without src/ runs. A file newer than the stamp counts as
+ * changed only when its content differs from what the build recorded
+ * (scripts/build-stamp.js): a fresh checkout gives every file a new time.
+ */
+function buildProblem(core) {
+  const build = "npm ci && npm run build";
+  if (!fs.existsSync(path.join(core, "dist"))) {
+    return `${core} has no build (dist/ is missing); run: cd ${core} && ${build}`;
+  }
+  const stampPath = path.join(core, "dist", ".build-stamp");
+  const stampTime = mtime(stampPath);
+  if (stampTime === null) {
+    return `${core} has no build (dist/.build-stamp is missing, so the last build did not finish); ` +
+      `run: cd ${core} && ${build}`;
+  }
+  let stamp;
+  try {
+    stamp = JSON.parse(fs.readFileSync(stampPath, "utf8"));
+  } catch {
+    stamp = { files: {}, lock: null };
+  }
+  const recorded = stamp && typeof stamp.files === "object" && stamp.files !== null ? stamp.files : {};
+  const lockTime = mtime(path.join(core, "package-lock.json"));
+  if (lockTime !== null) {
+    const installed = mtime(path.join(core, "node_modules", ".package-lock.json"));
+    if (installed === null || (installed < lockTime && sha1(path.join(core, "package-lock.json")) !== stamp.lock)) {
+      return `the dependencies in ${core}/node_modules are older than package-lock.json; run: cd ${core} && ${build}`;
+    }
+  }
+  const sources = [...walk(path.join(core, "src"), "src", []), "tsconfig.json", "tsconfig.build.json"]
+    .map((rel) => [mtime(path.join(core, rel)), rel])
+    .filter(([t, rel]) => t !== null && t > stampTime && recorded[rel] !== sha1(path.join(core, rel)))
+    .sort((a, b) => b[0] - a[0]);
+  if (sources.length) {
+    return `the build in ${core}/dist is older than the source (${sources[0][1]}); run: cd ${core} && npm run build`;
+  }
+  return null;
+}
+
+/** JSON as Python's json.dumps writes it for a hook: ", " and ": ", non-ASCII escaped. */
+function hookJson(text) {
+  const str = JSON.stringify(text).replace(/[\u007f-￿]/g, (c) => "\\u" + c.charCodeAt(0).toString(16).padStart(4, "0"));
+  return `{"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": ${str}}}`;
+}
+
+const args = process.argv.slice(2);
+const major = Number(process.versions.node.split(".")[0]);
+const core = fs.realpathSync(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
+// An old Node is checked first: the build check and the compiled code need Node 22.
+const problem = major < 22
+  ? `sous chef needs Node 22 or later; this is Node ${process.version} at ${process.execPath}`
+  : buildProblem(core);
+if (problem && args[0] === "hook" && args[1] === "chef-start") {
+  // A hook must never break the session: sous chef's startup hook says what is wrong instead.
+  process.stdout.write(hookJson(`Sous chef cannot start: ${problem}. Tell the person you are working with, ` +
+    "and do nothing as sous chef until it is fixed.") + "\n");
+} else if (problem) {
+  // Exit 1, never 2: a PreToolUse hook exiting 2 would block the tool call.
+  process.stderr.write(`${PROGRAM}: ${problem}\n`);
+  process.exitCode = 1;
+} else {
+  const { main } = await import(pathToFileURL(path.join(core, "dist", "main.js")).href);
+  process.exitCode = await main(PROGRAM, args);
+}

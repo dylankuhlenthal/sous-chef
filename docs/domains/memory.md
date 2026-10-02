@@ -2,7 +2,7 @@
 
 Sous chef is meant to run in one Claude Code session for as long as the owner likes. Claude Code compacts long conversations, and sessions restart. Sous chef survives both by keeping everything that matters in files and reloading a bounded summary of them whenever a session starts, resumes or is compacted.
 
-Code: `lib/sc/summary.py` (`build`, `sessions_table`), `lib/sc/hooks.py` (`chef_start`, `chef_stop`), `lib/sc/chef.py`, `lib/sc/context.py`, `.agents/settings.json`. Rules for what sous chef writes: `AGENTS.md`, "Memory: write things down as they happen".
+Code: `src/summary.ts` (`build`, `sessionsTable`), `src/hooks.ts` (`chefStart`, `chefStop`), `src/chef.ts`, `src/context.ts`, `.agents/settings.json`. Rules for what sous chef writes: `AGENTS.md`, "Memory: write things down as they happen".
 
 ## Memory files
 
@@ -28,26 +28,26 @@ The owner's own rules for sous chef live in `my/instructions.md`, not in the cor
 
 `summary.build` produces:
 
-- **Owner line**, first: `Owner: <name>. Branch prefix: <prefix>.` from `my/owner.json` (`summary.owner_line`, `util.owner`), or `No owner set: run sc owner set ...` when there is none, or why the file cannot be used. The summary never refuses: without an owner it still shows everything below, because this line is how sous chef learns the owner is missing.
-- **The owner's instructions**, right after it: `my/instructions.md` in full up to `INSTRUCTIONS_CAP` (12,000 characters), under a heading telling sous chef to follow them as it follows `AGENTS.md`; `ABSENT` when there is no file (`summary.instructions_section`).
+- **Owner line**, first: `Owner: <name>. Branch prefix: <prefix>.` from `my/owner.json` (`summary.ownerLine`, `util.owner`), or `No owner set: run sc owner set ...` when there is none, or why the file cannot be used. The summary never refuses: without an owner it still shows everything below, because this line is how sous chef learns the owner is missing.
+- **The owner's instructions**, right after it: `my/instructions.md` in full up to `INSTRUCTIONS_CAP` (12,000 characters), under a heading telling sous chef to follow them as it follows `AGENTS.md`; `ABSENT` when there is no file (`summary.instructionsSection`).
 - **Sessions:** one line per active session with kind, running or stopped, waiting on, last event, open questions and unhandled messages.
 - **Attention:** the count of unread events that need attention (`events.WAKE_STATES`, across the sessions, the cron log, the slack log and the sync log, plus every unread entry in the context log, so a session that only reported `working` is not counted here although `sc events` still lists it), the count of open questions, and, when there are any, the count of unread notes shown separately as needing no action. Any of the three prompts an instruction to run `sc events`. An unread job for sous chef (`docs/domains/cron.md`) is counted with the events that need attention, so a job that fired while sous chef was down is picked up here.
 - **Watcher:** whether it is running.
-- **Cron jobs:** one line per scheduled job (`summary.cron_lines`), and any broken definition.
-- **Context check:** whether sous chef is warned before compaction, its settings, the last reading, and any failure to read (`context.status_lines`; `docs/domains/context.md`).
-- **Slack:** off (no `.env`), or on with the relay's address, and whether the relay answered the watcher's last poll or since when it has not (`slack.status_lines`; `docs/domains/slack.md`).
+- **Cron jobs:** one line per scheduled job (`summary.cronLines`), and any broken definition.
+- **Context check:** whether sous chef is warned before compaction, its settings, the last reading, and any failure to read (`context.statusLines`; `docs/domains/context.md`).
+- **Slack:** off (no `.env`), or on with the relay's address, and whether the relay answered the watcher's last poll or since when it has not (`slack.statusLines`; `docs/domains/slack.md`).
 - **Memory:** each memory file above, in full up to `FILE_CAP` (6,000 characters) each, headed with its path as `my/memory/<file>`.
 
 The whole summary is capped at `TOTAL_CAP` (42,000 characters, roughly 10,500 tokens), so it stays affordable in a very long session. It is cut from the end, where the memory sections are, so the cap grew by the instructions' own cap when they were added (from 30,000) rather than letting them push memory out. Anything cut is marked with the file to read. `sc summary` prints the same text.
 
 ## The hook
 
-`.agents/settings.json` (reachable as `.claude/settings.json`) runs `sc hook chef-start` on every SessionStart, with no matcher, so it fires for `startup`, `resume`, `clear` and `compact`. `hooks.chef_start`:
+`.agents/settings.json` (reachable as `.claude/settings.json`) runs `sc hook chef-start` on every SessionStart, with no matcher, so it fires for `startup`, `resume`, `clear` and `compact`. `hooks.chefStart`:
 
-0. Before anything that needs the data folder: if the code folder is a git worktree of the core, tells the session it is not sous chef (`chef.worktree_of_home`); if there is no usable data folder, says what to run and stops (`util.home_problem`).
-1. Checks whether another session already holds the role and is still running (`chef.live_incumbent`). If so it stops here, telling this session it is not sous chef and naming the one that is. Wake-ups follow the registration, so taking it from a running owner would leave that session unheard.
+0. Before anything that needs the data folder: if the code folder is a git worktree of the core, tells the session it is not sous chef (`chef.worktreeOfHome`); if there is no usable data folder, says what to run and stops (`util.homeProblem`).
+1. Checks whether another session already holds the role and is still running (`chef.liveIncumbent`). If so it stops here, telling this session it is not sous chef and naming the one that is. Wake-ups follow the registration, so taking it from a running owner would leave that session unheard.
 2. Otherwise registers the session in `my/state/chef.json` (`chef.register`), so wake-ups reach whichever session is sous chef now.
-3. Starts the watcher if it is not running, or replaces it if it is not on the current code (`watch.ensure`); the summary gets a note when it replaced one or could not. Replacing waits for the old watcher to finish a cycle, so this step can take up to about 45 seconds, inside the hook's 60-second timeout.
+3. Starts the watcher if it is not running, or replaces it if it is not on the current code (`ensure` in `src/watch.ts`); the summary gets a note when it replaced one or could not. Replacing waits for the old watcher to finish a cycle, so this step can take up to about 55 seconds (30 to see the old watcher finish a cycle, 10 for it to let go of the lock, 15 for the new one to start), inside the hook's 60-second timeout.
 4. On `startup`, notes if a dead session held the role before, so the takeover is visible.
 5. Returns the startup summary as additional context, headed with the source and an instruction to trust the summary and files over conversation memory.
 
@@ -58,7 +58,7 @@ This matters because **every** session started in the core runs the hook, includ
 The same settings file:
 
 - runs `sc hook chef-stop` on every Stop, at the end of each turn, which checks how full sous chef's context is and warns it before compaction (`docs/domains/context.md`). It acts only for the registered sous chef session, and is off until a warning level is set;
-- adds a PreToolUse hook (`sc hook guard-edit`) that denies Edit, Write, MultiEdit and NotebookEdit on anything under `my/state/` (checked on the resolved path, so through the link or in the data folder directly) and under the core's own `state/`; it keeps guarding the core's `state/` when there is no data folder. Spawned sessions run the same hook (`ops.worker_settings`), with their own `report.md` as the one allowed path. It does **not** cover Bash in either place, so a shell redirect or `sed -i` into `state/` still works; the rule is kept by instruction as well as by the hook;
+- adds a PreToolUse hook (`sc hook guard-edit`) that denies Edit, Write, MultiEdit and NotebookEdit on anything under `my/state/` (checked on the resolved path, so through the link or in the data folder directly) and under the core's own `state/`; it keeps guarding the core's `state/` when there is no data folder. Spawned sessions run the same hook (`ops.workerSettings`), with their own `report.md` as the one allowed path. It does **not** cover Bash in either place, so a shell redirect or `sed -i` into `state/` still works; the rule is kept by instruction as well as by the hook;
 - sets `"worktree": {"bgIsolation": "none"}` so sous chef can edit its own files when it runs as a background session;
 - pre-approves four Bash patterns so sous chef is not asked every time: `sc`, `bin/sc`, `claude agents` and `claude logs`.
 
