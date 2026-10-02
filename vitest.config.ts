@@ -2,8 +2,11 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
-    // Only the TypeScript tests: the behaviour suite is Python (tests/test_*.py) until TRV-1157.
     include: ["tests/**/*.test.ts"],
-    testTimeout: 30000,
+    // Files run in parallel, the tests within a file one at a time (vitest's default, forks
+    // pool): every test has its own temporary home, work folder and code copy, and the fake
+    // relay takes a free port. 60 s is the longest wait any test has (a watcher subprocess).
+    testTimeout: 60000,
+    hookTimeout: 60000,
   },
 });
