@@ -90,23 +90,21 @@ The next `souschef` resumes the same sous chef, in the mode it was started with.
 
 ## Switching from the Python sous chef to TypeScript
 
-A sous chef installed before the core moved to TypeScript runs the Python core. Pulling the TypeScript core into `~/.sous-chef` by hand is not enough: the running Python watcher cannot restart itself on Node code (it keeps running the old code from memory), and sous chef's hooks, the watcher and every session's saved hooks call `~/.sous-chef/bin/sc`, so the change has to happen in one go with sous chef and the watcher stopped. A one-off script does it, rehearsed on a scratch install before it was used; why it works this way: decision 0028 (switching the live sous chef to TypeScript).
-
-The script is not in the core's tree. It is in the core's history, in the commit before the one that deleted it. From a plain terminal (never from inside a Claude session), after the TypeScript core is merged into `main`, without pulling `~/.sous-chef` by hand:
+The core moved from Python to TypeScript, and `~/.sous-chef` was switched over with a one-off script (decision 0028, switching the live sous chef to TypeScript). The Python code and tests have since left the core. To switch another install that still runs the Python core, use the same script: it is in the core's history, in the commit before the one that deleted it. From a plain terminal, never from inside a Claude session:
 
 ```sh
 git -C ~/.sous-chef fetch origin
 c=$(git -C ~/.sous-chef log -1 --full-history --diff-filter=D --format=%H origin/main -- switch-over/switch_over.py)
 git -C ~/.sous-chef show "$c^:switch-over/switch_over.py" > /tmp/switch_over.py
-python3 /tmp/switch_over.py --core ~/.sous-chef --check       # every check and the staged suite; changes nothing live
+python3 /tmp/switch_over.py --core ~/.sous-chef --check       # every check; changes nothing live
 python3 /tmp/switch_over.py --core ~/.sous-chef               # the switch; add --accept-stopped to keep stopped sessions
 ```
 
-Before it, stop the sessions still running (`sc sessions`, `sc stop <id>`) and let sous chef finish its turn. The script refuses, changing nothing, when a session on record is running, when stopped sessions are on record and `--accept-stopped` is not given, when sous chef is mid-turn or open in a terminal, when `~/.sous-chef` is not a clean checkout of `main` with its `my` link at the Python core (or, going forward again, below), when `git fetch` fails, when `origin/main` does not yet hold the TypeScript core or `HEAD` is not behind it, when a `last-python` tag already names another commit, when `node` is older than 22, or when the staged suite fails. After you confirm, it checks the sessions and sous chef again, waiting up to two minutes for a turn sous chef started meanwhile to end. Otherwise it stages `origin/main` in a temporary clone (`npm ci`, `npm run build`, the full suite against that copy's `sc`), asks once, tags the Python commit `last-python` and pushes the tag, stops sous chef (`claude stop`) and then the watcher (SIGTERM, then it waits; never SIGKILL), moves `~/.sous-chef` to the commit it tested (`git merge --ff-only`), runs the update step from "The build, and updating after a pull" above, and runs `souschef --print`, which resumes the same sous chef conversation; its startup hook starts the TypeScript watcher. Last, it checks that sous chef is the same session and running, that exactly one watcher runs, under Node, and that `sc summary` shows no watcher warning, then prints the attach command and a checklist for the things it cannot check: a spawned session waking sous chef, Slack, a cron job firing and the data sync. If anything after the stops fails, it prints the rollback command; running it again is also safe. It never changes the data folder or the `my` link.
+Decision 0028 says what it checks and does. One check no longer works as written: the script runs the Python test suite in a staged copy of `origin/main`, and `main` has no Python tests now, so that step tests nothing (Python 3.11 counts no tests as a pass; 3.12 and later fail it). Run `npm ci && npm test` in a fresh clone of `main` yourself first.
 
 ## Going back to the Python version
 
-Until the Python code leaves the core (the step after the switch), the last Python commit is tagged `last-python`. To go back:
+The last Python commit is tagged `last-python`, and the tag keeps the whole Python tree, so going back still works now that the Python code has left `main`. It needs Python 3 again, since that is what the Python sous chef runs on. To go back:
 
 ```sh
 python3 /tmp/switch_over.py --core ~/.sous-chef --rollback
@@ -175,7 +173,6 @@ Sous chef needs none of these to run; they exist for the watcher's timing and fo
 | `SC_IDENTITY_WAIT` | How long `sc report` waits for a just-launched session's record (default 25 seconds) |
 | `SC_TEST_HOME`, `SC_FAKE_NOW`, `SC_CHEF_RUNTIME`, `SC_WATCH_DISABLE_ENSURE`, `SC_FAKE_LAUNCH_FAILS`, `SC_FAKE_RESUME_FAILS` | Tests only: the data folder, the clock, the runtime recorded for sous chef and the one `souschef` starts and resumes it on, suppressing the real watcher, and making a fake launch or resume fail |
 | `SC_TEST_CODE_FILE` | Tests only: one more file the watcher counts as its code (`codeFingerprint` in `src/watch.ts`), so a test can make the watcher restart by changing that file |
-| `SC_UNDER_TEST` | The test suite only, never `sc`: the code root whose `sc` the suite tests (see "Tests" below) |
 
 Sessions are never launched with any of these; see "Which session is calling" in `docs/domains/sessions.md`.
 
@@ -183,26 +180,15 @@ Sessions are never launched with any of these; see "Which session is calling" in
 
 ```sh
 cd ~/.sous-chef
-npm ci && npm run build
-PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests
-npx vitest run
+npm ci
+npm test
 ```
 
-`npm test` does the same in one command (build, vitest, then the Python suite). The suite runs the real `sc` command against a temporary home using the `fake` runtime, so it starts no Claude sessions. `WatcherCodeTests` and `CronWakeNoteTests` start real watcher processes from a temporary copy of the code and stop them afterwards; the live watcher is never touched. Claude Code behaviour is checked by hand; `docs/domains/sessions.md` lists what was verified.
+`npm test` builds (`npm run build`), then runs the whole suite with vitest (`tests/*.test.ts`); `npx vitest run tests/<file>.test.ts` runs one file once the build is current. Development needs only Node and npm. The behaviour tests run the real `sc` command against a temporary home using the `fake` runtime, so they start no Claude sessions. `WatcherCodeTests` and `CronWakeNoteTests` start real watcher processes from a temporary copy of the code and stop them afterwards; the live watcher is never touched. Claude Code behaviour is checked by hand; `docs/domains/sessions.md` lists what was verified. `AGENTS.md` ("Testing") says what each part of the suite covers.
 
-To run the suite against another code root (a folder with an executable `bin/sc` and `bin/souschef`, such as another checkout or a staged copy), name it with an absolute path:
+The captured-output tests (`tests/captured.test.ts`) compare output word for word with the files in `tests/captured/`, with paths, session ids and the fake relay's port replaced by placeholders. After a deliberate change to that output, run them with `SC_UPDATE_CAPTURED=1` to rewrite the files, and check their diff: it is the list of what changed for the owner.
 
-```sh
-SC_UNDER_TEST=<code root> PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests
-```
-
-The tests come from this checkout and the `sc` from the code root. Tests marked Python-only (the Python sc's internals) are skipped when that `sc` is not the Python one; `AGENTS.md` ("Testing") says how this is decided.
-
-`npx vitest run` runs the TypeScript unit tests in `tests/*.test.ts` (`AGENTS.md`, "Testing", lists what they cover). Three of them run the built code and fail without a build: the launcher tests, the `install.sh` tests and the closed-output test (`tests/launcher.test.ts`, `tests/install.test.ts`, `tests/closed-output.test.ts`); the rest run `src/` directly. The Python behaviour tests above stay the gate for behaviour until they are ported (TRV-1157).
-
-The captured-output tests (`tests/test_captured.py`) compare output word for word with the files in `tests/captured/`, with paths, session ids and the fake relay's port replaced by placeholders. After a deliberate change to that output, run the suite with `SC_UPDATE_CAPTURED=1` to rewrite the files, and check their diff: it is the list of what changed for the owner.
-
-The suite must pass in the core as published, which ships only the core's two kinds: tests that run a copy of the code use `tests/core_paths.py` (the core's path list), which copies only core files.
+The suite must pass in the core as published, which ships only the core's two kinds: tests that run a copy of the code use `tests/core-paths.ts` (the core's path list), which copies only core files.
 
 To try the whole flow with real sessions without touching real state, make a throwaway install from a plain copy of the core: `mkdir -p <scratch>/core && git archive HEAD | tar -x -C <scratch>/core` (run in the core), then `<scratch>/core/install.sh --data <scratch>/data --name <you> --no-git --bin-dir <scratch>/bin --yes` (it runs `npm ci` and the build), and use the copy's own commands (`<scratch>/core/bin/souschef --print`, `<scratch>/core/bin/sc`). Not a `git worktree`: a session started in a worktree of the core is told it is not sous chef, so the copy's sous chef would never take the role. Sessions it launches use the copy's `sc` by full path. Background sessions only start in a folder Claude Code trusts (you ran `claude` there and accepted the prompt; see the trust learning in `AGENTS.md`), so give them such a `--cwd`. Afterwards stop and `claude rm` the test sessions, stop the copy's watcher (`<scratch>/data/state/watch.pid`), and delete the scratch folder. Do not use environment variables to redirect a real sous chef; sessions can start with stale ones.
 

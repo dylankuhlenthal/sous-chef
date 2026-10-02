@@ -6,7 +6,7 @@ There is no server or daemon to install. Everything is either a file in one of t
 
 ## Two folders joined by one link
 
-The **core** is the code everyone shares (the sous chef repo): `bin/`, `src/` (the code, TypeScript on Node 22 or later, compiled into `dist/` by `npm run build`), `lib/` (the old Python code, kept until TRV-1157, the last step of the rewrite, removes it), `templates/`, `docs/`, `tests/`, the core kinds, `AGENTS.md`, `.agents/` and `install.sh`. It runs from `~/.sous-chef`, because Claude Code's trust, its saved conversations and every brief's `sc` path are keyed to that path.
+The **core** is the code everyone shares (the sous chef repo): `bin/`, `src/` (the code, TypeScript on Node 22 or later, compiled into `dist/` by `npm run build`), `templates/`, `docs/`, `tests/`, the core kinds, `AGENTS.md`, `.agents/` and `install.sh`. It runs from `~/.sous-chef`, because Claude Code's trust, its saved conversations and every brief's `sc` path are keyed to that path.
 
 The **data folder** is the owner's own: their memory, cron jobs, kinds, owner file, instructions, settings, `state/` and `.env`. It lives wherever the owner chose at install (by default `~/.my-sous-chef`) and may be a private git repo of its own, which the watcher keeps committed and pushed.
 
@@ -50,7 +50,7 @@ flowchart LR
 | Context check | Sous chef's Stop hook: reads how full its context is from Claude Code's transcript and, past a set level, leaves a warning to write working state to memory before compaction | `src/context.ts`, settings in `my/context.json` |
 | Slack | Sous chef's messages to the owner in Slack, sent through the messaging relay (a separate service) with the owner's key; config in `my/.env`, never tracked | `src/slack.ts`, `src/relay.ts`; see `docs/domains/slack.md` |
 | Install | Makes or connects the owner's data folder and the `my` link, and links `sc` and `souschef` | `install.sh`, `src/setup.ts` (`sc setup`) |
-| Runtime | The only code that knows how a session actually runs | `src/runtimes/` (`claude-bg.ts`, and `fake.ts` for tests). The Claude runtime reaches sessions through Porch, used as a library pinned to a tag: listing, status, waking, launching and turn times go through Porch, while resume, stop and attach run `claude` directly (decisions 0025 and 0026; `docs/domains/sessions.md`, "The Claude runtime"). The Python Claude runtime, `lib/sc/runtimes/claude_bg.py`, stays in the tree until TRV-1157 (tests in TypeScript, Python leaves the core) removes it |
+| Runtime | The only code that knows how a session actually runs | `src/runtimes/` (`claude-bg.ts`, and `fake.ts` for tests). The Claude runtime reaches sessions through Porch, used as a library pinned to a tag: listing, status, waking, launching and turn times go through Porch, while resume, stop and attach run `claude` directly (decisions 0025 and 0026; `docs/domains/sessions.md`, "The Claude runtime"). |
 
 ## How the main flows work
 
