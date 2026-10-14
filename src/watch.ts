@@ -42,7 +42,7 @@
 //
 // Sous chef's own session: when there is work for it (a wake-up to send, a scheduled job
 // due, unread cron events) and Claude Code stopped it for being idle, the watcher resumes it
-// first (`resumeChef`), within limits, unless `sc chef off` turned that off. Any other stop
+// first (`ChefGate`), within limits, unless `sc chef off` turned that off. Any other stop
 // (`claude stop`, /exit, a kill) is left alone. Nothing is done while there is no work.
 //
 // All wake-ups for sous chef in one cycle go out as a single message. Everything
@@ -423,7 +423,7 @@ class ChefGate {
       const held = this.held("max", `it has already tried ${attempts.length} times in the last 24 hours, the most ` +
         "it may (SC_CHEF_RESUME_MAX)");
       await this.tell("max", `Claude Code stopped sous chef for being idle, and the watcher has not resumed it: it ` +
-        `already did so ${attempts.length} times in the last 24 hours, the most it may. There is work waiting ` +
+        `already tried ${attempts.length} times in the last 24 hours, the most it may. There is work waiting ` +
         `(${why}). Open sous chef with \`souschef\` to look.`, held);
       return held;
     }

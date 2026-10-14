@@ -12,7 +12,7 @@
 // start going to it instead.
 //
 // state/chef-resume.json is the off switch for the watcher resuming sous chef after Claude
-// Code stops it for being idle (watch.ts, `resumeChef`): {"on": false, "changed_at": ...,
+// Code stops it for being idle (watch.ts, `ChefGate`): {"on": false, "changed_at": ...,
 // "by": "sc chef off"}. No file means on. `sc chef off` and `sc chef on` write it, and
 // `souschef` turns it back on. It is a file of its own, not part of chef.json (which every
 // start, resume and compaction rewrites) or watch.json (which the watcher rewrites every cycle).

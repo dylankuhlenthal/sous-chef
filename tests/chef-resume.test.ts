@@ -187,7 +187,7 @@ describe("ChefResumeTests", () => {
     expect(out).toContain("not resumed: it has already tried 2 times in the last 24 hours, the most it may (SC_CHEF_RESUME_MAX)");
     expect(out).toContain("sous chef: told Alex in Slack (max)");
     expect(relay.posts.map((p: Json) => p.text)).toEqual(["Claude Code stopped sous chef for being idle, and the watcher has " +
-      "not resumed it: it already did so 2 times in the last 24 hours, the most it may. There is work waiting " +
+      "not resumed it: it already tried 2 times in the last 24 hours, the most it may. There is work waiting " +
       "(sessions need attention (general-test-task-" + relay.posts[0].text.split("general-test-task-")[1]!.split(")")[0] +
       ")). Open sous chef with `souschef` to look."]);
     t.clock += 3600;
