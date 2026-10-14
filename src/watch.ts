@@ -40,6 +40,11 @@
 // Last, when the data folder is a git repo with an upstream, it commits and pushes it
 // (sync.tick), and wakes sous chef if syncing stopped.
 //
+// Sous chef's own session: when there is work for it (a wake-up to send, a scheduled job
+// due, unread cron events) and Claude Code stopped it for being idle, the watcher resumes it
+// first (`resumeChef`), within limits, unless `sc chef off` turned that off. Any other stop
+// (`claude stop`, /exit, a kill) is left alone. Nothing is done while there is no work.
+//
 // All wake-ups for sous chef in one cycle go out as a single message. Everything
 // the watcher finds is written to the session's event log first, so a failed
 // wake-up delays attention but never loses it.
@@ -143,6 +148,8 @@ export async function cycle(): Promise<{ actions: string[] }> {
   const autoResumeMinUp = envFloat("SC_AUTO_RESUME_MIN_UP", 600);
 
   let wstate = (or(readJson<WState>(statePath(), {}), {}) as WState);
+  // Sous chef's own session: resumed at most once a cycle, and only when there is work for it.
+  const chefGate = new ChefGate(setdefault(wstate, CHEF_KEY, {}), pollNow);
   const listings = new Map<string, Listing | null>();
   const chefNeeded: string[] = [];
   const actions: string[] = [];
@@ -270,14 +277,20 @@ export async function cycle(): Promise<{ actions: string[] }> {
     }
   }
 
-  // 6. scheduled jobs, then the cron log's unread events, delivered only while sous chef is idle
+  await chefGate.look(listings);
+
+  // 6. scheduled jobs, then the cron log's unread events, delivered only while sous chef is idle.
+  // Jobs fire only while sous chef runs, so a job due while it is stopped for being idle resumes it first.
   try {
+    const due = cron.dueJobs();
+    if (due.length) actions.push(...await chefGate.resume(`scheduled job(s) due: ${due.join(", ")}`));
     actions.push(...(await cron.tick()).actions);
   } catch (e) { // a broken job must not stop the session checks
     actions.push("cron failed:\n" + errorText(e));
   }
   const cs = setdefault(wstate, events.CRON_LOG, {});
   let cronWake = false;
+  if (events.unread(events.CRON_LOG).length) actions.push(...await chefGate.resume("unread scheduled job events"));
   if (events.unread(events.CRON_LOG).length && (await chef.status()).busy === false) {
     cronWake = rewakeDue(events.CRON_LOG, cs, pollNow, wakeRetry, false);
     if (cronWake) actions.push("cron: woke sous chef for unread cron events");
@@ -309,7 +322,7 @@ export async function cycle(): Promise<{ actions: string[] }> {
   const syncWake = rewakeDue(events.SYNC_LOG, setdefault(wstate, events.SYNC_LOG, {}), pollNow, wakeRetry, false);
 
   // Forget watcher state for sessions that were cleaned up.
-  const active = new Set([...records.allIds(), events.CRON_LOG, events.SLACK_LOG, events.SYNC_LOG]);
+  const active = new Set([...records.allIds(), events.CRON_LOG, events.SLACK_LOG, events.SYNC_LOG, CHEF_KEY]);
   wstate = Object.fromEntries(Object.entries(wstate).filter(([k]) => active.has(k)));
 
   if (chefNeeded.length || cronWake || slackWake || syncWake) {
@@ -318,11 +331,163 @@ export async function cycle(): Promise<{ actions: string[] }> {
     if (cronWake) parts.push("scheduled jobs are waiting for you");
     if (slackWake) parts.push(slackNew ? `${slackNew} new Slack message(s)` : "Slack messages are waiting for you");
     if (syncWake) parts.push("syncing your data folder stopped");
+    actions.push(...await chefGate.resume(parts.join("; ")));
+    if (chefGate.resumed) {
+      parts.unshift("you were resumed after Claude Code stopped you for being idle, because there is work for you");
+    }
     const ok = await chef.wakeChef(`sous chef watcher: ${parts.join("; ")}. Run \`sc events\`.`);
     actions.push(`woke sous chef: ${ok ? "True" : "False"}`);
   }
   writeJson(statePath(), wstate);
   return { actions };
+}
+
+/** watch.json's key for the watcher's record of resuming sous chef's own session. */
+export const CHEF_KEY = "_chef";
+
+/**
+ * Resuming sous chef's own session after Claude Code stopped it for being idle.
+ *
+ * `resume(why)` is called only where there is work for sous chef (a wake-up about to go
+ * out, a scheduled job due, unread cron events), so an idle sous chef with nothing to do is
+ * left stopped. It resumes the registered session, keeping its conversation, only when:
+ * - it is not running, and the runtime says the tool stopped it for being idle
+ *   (`Status.stopped.idle`: for Claude, Porch's `ended` with endReason `idle`). A stop by a
+ *   person (`claude stop`, /exit, Ctrl+C), a killed or crashed session, a failed listing and
+ *   anything unknown are left alone, as before;
+ * - the off switch is on (`sc chef off` turns it off, `souschef` back on: chef.resumeSwitch);
+ * - fewer than SC_CHEF_RESUME_MAX attempts were made in the last 24 hours, and none in the
+ *   last SC_CHEF_RESUME_GAP seconds. An idle stop takes about an hour, so attempts closer
+ *   together than that mean the resume is failing or something else is stopping it.
+ *
+ * Every attempt is kept in `s.attempts` ({at, ok}, the last 24 hours). The 24-hour limit and
+ * a failed resume are told to the owner in Slack, once each until a resume succeeds
+ * (`s.told`), since the owner reaches sous chef through Slack when away. What happened last
+ * (`s.last`) is shown by `sc chef` and the startup summary. At most one try per cycle.
+ */
+class ChefGate {
+  resumed = false;
+  private tried = false;
+  private st: Partial<Status> | null = null;
+
+  constructor(private s: Dict, private pollNow: number) {}
+
+  /**
+   * Every cycle, before any `resume`: how sous chef's session is, from this cycle's listing.
+   *
+   * An idle stop the runtime reports is remembered (`s.idle_stop`) until the session is seen
+   * running again, because Porch forgets an ended session a day after it ended, and then
+   * shows it as not found: without this, a sous chef stopped for being idle over a weekend
+   * would never be resumed. A stopped session cannot stop again without running first, so
+   * whatever the runtime says about it after an idle stop is the same stop.
+   */
+  async look(listings: Map<string, Listing | null>): Promise<void> {
+    const info = chef.current();
+    if (!info || !truthy(info.session_id)) return;
+    const rt = runtimes.get(info.runtime);
+    try {
+      if (!listings.has(info.runtime)) listings.set(info.runtime, await rt.listing());
+      const rows = listings.get(info.runtime);
+      this.st = rows ? await rt.statusSessionId(info.session_id, rows) : null;
+    } catch (e) {
+      if (!(e instanceof SCError)) throw e;
+      listings.set(info.runtime, null);
+      this.st = null; // a failed listing tells nothing: never a reason to resume, nor to forget
+    }
+    const remembered = get<Dict | null>(this.s, "idle_stop", null);
+    if (remembered && remembered.session_id !== info.session_id) delete this.s.idle_stop; // another session registered
+    if (this.st?.alive) {
+      delete this.s.idle_stop;
+      delete this.s.held;
+    } else if (this.st?.stopped?.idle && !truthy(get(this.s, "idle_stop", null))) {
+      this.s.idle_stop = { session_id: info.session_id, seen_at: this.pollNow };
+    }
+  }
+
+  async resume(why: string): Promise<string[]> {
+    if (this.tried) return [];
+    this.tried = true;
+    const info = chef.current();
+    const st = this.st;
+    // Running, unknown, or stopped for any other reason than being idle: left alone, as before.
+    if (!info || !st || st.alive || !st.stopped || !(st.stopped.idle || truthy(get(this.s, "idle_stop", null)))) return [];
+    const max = Math.trunc(envFloat("SC_CHEF_RESUME_MAX", 24));
+    const gap = envFloat("SC_CHEF_RESUME_GAP", 600);
+    const attempts = (get<Dict[]>(this.s, "attempts", [])).filter((a) => this.pollNow - (a.at as number) < 86400);
+    this.s.attempts = attempts;
+    const sw = chef.resumeSwitch();
+    if (!sw.on) return this.held("off", "it is switched off (`sc chef off`; `sc chef on` or `souschef` turns it back on)");
+    if (max <= 0) return this.held("max", "SC_CHEF_RESUME_MAX is 0");
+    if (attempts.length >= max) {
+      const held = this.held("max", `it has already tried ${attempts.length} times in the last 24 hours, the most ` +
+        "it may (SC_CHEF_RESUME_MAX)");
+      await this.tell("max", `Claude Code stopped sous chef for being idle, and the watcher has not resumed it: it ` +
+        `already did so ${attempts.length} times in the last 24 hours, the most it may. There is work waiting ` +
+        `(${why}). Open sous chef with \`souschef\` to look.`, held);
+      return held;
+    }
+    const last = attempts[attempts.length - 1];
+    if (last && this.pollNow - (last.at as number) < gap) {
+      return this.held("gap", `it last tried ${age(last.at as number)} ago; it tries again ` +
+        `${Math.floor(gap / 60)} minutes after that (SC_CHEF_RESUME_GAP)`, false);
+    }
+    let short: string | null = null;
+    let error = "the session did not come back";
+    try {
+      short = await runtimes.get(info.runtime).resumeSessionId(info.session_id, CODE_ROOT, chef.sessionEnv());
+    } catch (e) { // a failed resume never stops the cycle
+      error = e instanceof Error ? e.message : String(e);
+    }
+    attempts.push({ at: this.pollNow, ok: short !== null });
+    const n = `${attempts.length} of at most ${max} in 24 hours`;
+    if (short === null) {
+      this.s.last = { at: this.pollNow, what: `resume failed (${n}): ${error}` };
+      const out = [`sous chef: resume after an idle stop failed (${n}): ${error}`];
+      await this.tell("failed", `Claude Code stopped sous chef for being idle, and the watcher could not resume it: ` +
+        `${error}. It tries again in ${Math.floor(gap / 60)} minutes while there is work (${why}); ` +
+        "`souschef` opens it now.", out);
+      return out;
+    }
+    this.resumed = true;
+    this.s.last = { at: this.pollNow, what: `resumed after an idle stop (${n}), for: ${why}` };
+    delete this.s.held;
+    delete this.s.told;
+    return [`sous chef: resumed (${short}) after Claude Code stopped it for being idle (${n}), for: ${why}`];
+  }
+
+  /** Not resumed for `reason`: logged once per reason until something changes; `shown` also sets `last`. */
+  private held(code: string, reason: string, shown = true): string[] {
+    if (get(this.s, "held", null) === code) return [];
+    this.s.held = code;
+    if (shown) this.s.last = { at: this.pollNow, what: `not resumed after an idle stop: ${reason}` };
+    return [`sous chef: stopped for being idle and there is work, but not resumed: ${reason}`];
+  }
+
+  /** Tell the owner in Slack, once per `code` until a resume succeeds; a failure is only logged. */
+  private async tell(code: string, text: string, out: string[]): Promise<void> {
+    const told = get<string[]>(this.s, "told", []);
+    if (told.includes(code) || !slack.config()) return;
+    try {
+      await slack.send(text);
+      this.s.told = [...told, code];
+      out.push(`sous chef: told ${ownerName()} in Slack (${code})`);
+    } catch (e) {
+      out.push(`sous chef: could not tell ${ownerName()} in Slack: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+}
+
+/** The switch and what the watcher last did about resuming sous chef, for `sc chef`, the summary and `sc watch --ensure`. */
+export function chefResumeLine(): string {
+  const sw = chef.resumeSwitch();
+  const when = sw.changed_at ? ` (${sw.by ?? "set"}, ${age(sw.changed_at)} ago)` : "";
+  let line = sw.on
+    ? `resumes sous chef after Claude Code stops it for being idle, when there is work: on${when}; \`sc chef off\` turns it off`
+    : `resumes sous chef after Claude Code stops it for being idle: OFF${when}; \`sc chef on\` or \`souschef\` turns it on`;
+  const s = get<Dict>((or(readJson<WState>(statePath(), {}), {}) as WState), CHEF_KEY, {});
+  const last = get<Dict | null>(s, "last", null);
+  if (last) line += `\n  last: ${String(last.what)} (${age(last.at as number)} ago)`;
+  return `the watcher ${line}`;
 }
 
 // Who a session may be waiting on for the watcher to resume it after it stopped by

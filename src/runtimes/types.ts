@@ -70,11 +70,15 @@ export interface Turns {
 /**
  * How the runtime sees a stopped session: who says so (the name the watcher's `gone` event
  * gives, for example "Porch"), its status word, and the reason it gives (null: none).
+ * `idle` is true only when the runtime knows the tool itself stopped the session for being
+ * idle (Claude Code's idle stop); a stop by a person, a crash, or anything unknown is false.
+ * The watcher resumes sous chef's own session only on `idle` (watch.ts, `resumeChef`).
  */
 export interface Stopped {
   source: string;
   status: string;
   reason: string | null;
+  idle: boolean;
 }
 
 /**

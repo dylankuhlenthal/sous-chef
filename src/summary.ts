@@ -112,8 +112,9 @@ export function cronLines(): string {
 
 async function watcherLine(): Promise<string> {
   const h = await watch.health();
-  if (!h.running) return "NOT RUNNING: run `sc watch --ensure`";
-  return h.current ? "running" : `running, but NOT ON CURRENT CODE: ${h.problem}`;
+  const state = !h.running ? "NOT RUNNING: run `sc watch --ensure`"
+    : h.current ? "running" : `running, but NOT ON CURRENT CODE: ${h.problem}`;
+  return `${state}\n${watch.chefResumeLine()}`;
 }
 
 /** One file in full under a heading naming it as `shown`, cut at `cap` characters saying where the rest is. */

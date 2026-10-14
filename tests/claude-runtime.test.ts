@@ -134,7 +134,7 @@ function row(fields: Record<string, unknown> = {}) {
 
 describe("on Porch's Claude adapter, with canned listings", () => {
   function setup(rows: unknown[] | { code: number | null; stderr: string }, jobs: Record<string, unknown> = {},
-                 count = { agents: 0 }) {
+                 count = { agents: 0 }, daemonLog?: string) {
     const io: HarnessIO = {
       async run(_cmd, args) {
         if (args[0] !== "agents") return { code: 1, stdout: "", stderr: "unexpected" };
@@ -143,6 +143,7 @@ describe("on Porch's Claude adapter, with canned listings", () => {
         return { code: 0, stdout: JSON.stringify(rows), stderr: "" };
       },
       async readFile(file) {
+        if (file === path.join(env.CLAUDE_CONFIG_DIR!, "daemon.log")) return daemonLog ?? null;
         const m = /jobs\/([0-9a-f]+)\/state\.json$/.exec(file);
         return m && Object.hasOwn(jobs, m[1]!) ? JSON.stringify(jobs[m[1]!]) : null;
       },
@@ -210,7 +211,7 @@ describe("on Porch's Claude adapter, with canned listings", () => {
   it("reads a session Porch does not know as not running, not found", async () => {
     const rt = setup([]);
     expect(await rt.status(rec)).toEqual({ alive: false, busy: null, pid: null, prompt: null, activity: null,
-      stopped: { source: "Porch", status: "not found", reason: null } });
+      stopped: { source: "Porch", status: "not found", reason: null, idle: false } });
     expect(await rt.statusSessionId(SID, await rt.listing())).toMatchObject({ alive: false });
   });
 
@@ -391,19 +392,38 @@ describe("on Porch's Claude adapter, with canned listings", () => {
   });
 
   // 4. Pinned on purpose: looks wrong, is right.
-  it("reads an ended session, whatever the reason, as not alive and nothing more", async () => {
+  it("reads an ended session, whatever the reason, as not alive, and only reason idle as an idle stop", async () => {
     // `ended` also covers Claude Code stopping an idle session (endReason idle) and a SIGTERM
     // during a turn. Only rec.stopped_by_sc says sous chef stopped a session; the status
-    // carries the word and the reason for event text, and nothing that decides.
+    // carries the word and the reason for event text, and `idle`, which only the watcher's
+    // resume of sous chef's own session reads (`claude stop` is `other`: never resumed).
     const store = new RecordStore(sessionsDir(env));
     for (const reason of ["other", "idle"]) {
       await store.updateInside("claude", SID, { pid: 4242, status: "idle" });
       await store.updateInside("claude", SID, { status: "ended", endedAt: T2, endReason: reason });
       const st = await setup([row({ pid: null })]).status(rec);
       expect(st).toEqual({ alive: false, busy: null, pid: null, prompt: null, activity: null,
-        turns: { last_prompt_at: null, last_stop_at: null }, stopped: { source: "Porch", status: "ended", reason } });
+        turns: { last_prompt_at: null, last_stop_at: null },
+        stopped: { source: "Porch", status: "ended", reason, idle: reason === "idle" } });
       fs.rmSync(store.recordPath("claude", SID));
     }
+  });
+
+  // The two causes Claude Code's daemon log was seen giving when it stopped sous chef's own
+  // session (2026-10-12 and 13): Porch reads both as an idle stop. A killed session (no line) is not.
+  it("reads Claude Code's idle stop from its daemon log as idle, for both causes seen live", async () => {
+    const store = new RecordStore(sessionsDir(env));
+    for (const cause of ["settled", "idle-prompt"]) {
+      await store.updateInside("claude", SID, { pid: 4242, status: "idle", lastTurnEnd: T1,
+        data: { shortId: SHORT, startedAt: T1 } });
+      const log = `[${T2}] [bg] bg retire ${SHORT}: ${cause}, idle 61m\n`;
+      const st = await setup([], {}, { agents: 0 }, log).status(rec);
+      expect(st).toMatchObject({ alive: false, stopped: { status: "ended", reason: "idle", idle: true } });
+      fs.rmSync(store.recordPath("claude", SID));
+    }
+    await store.updateInside("claude", SID, { pid: 4242, status: "idle", lastTurnEnd: T1, data: { shortId: SHORT } });
+    expect(await setup([], {}, { agents: 0 }, "").status(rec))
+      .toMatchObject({ alive: false, stopped: { status: "gone", reason: null, idle: false } });
   });
 
   it("reads a session held at a prompt as busy", () => {

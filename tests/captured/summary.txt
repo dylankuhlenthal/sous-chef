@@ -12,6 +12,7 @@ Unread events needing attention: 1. Open questions: 1. Unread notes (no action n
 
 ## Watcher
 NOT RUNNING: run `sc watch --ensure`
+the watcher resumes sous chef after Claude Code stops it for being idle, when there is work: on; `sc chef off` turns it off
 
 ## Cron jobs
 None.

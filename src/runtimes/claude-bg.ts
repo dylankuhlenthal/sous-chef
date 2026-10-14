@@ -138,7 +138,16 @@ function activityOf(value: unknown): Activity | null {
 const SOURCE = "Porch";
 
 const NOT_FOUND: Status = { alive: false, busy: null, pid: null, prompt: null, activity: null,
-  stopped: { source: SOURCE, status: "not found", reason: null } };
+  stopped: { source: SOURCE, status: "not found", reason: null, idle: false } };
+
+/**
+ * Porch's endReason for a session Claude Code stopped for being idle: Porch reads it from
+ * Claude Code's daemon log (`bg retire <short id>: <cause>, idle <time>`, whatever the
+ * cause word, for example `settled` or `idle-prompt`) for a session launched with its hooks.
+ * `claude stop` ends with `other`, `/exit` with `prompt_input_exit`, and a killed session is
+ * `gone`, not `ended`.
+ */
+const IDLE_END_REASON = "idle";
 
 /**
  * A Porch observation as sous chef's Status (null: Porch does not know the session).
@@ -155,7 +164,8 @@ export function statusOf(obs: Observation | null | undefined): Status {
     ? { last_prompt_at: seconds(detail.lastTurnStart), last_stop_at: seconds(detail.lastTurnEnd) } : undefined;
   if (notRunning(obs.status)) {
     return { alive: false, busy: null, pid: null, prompt: null, activity: null, ...(turns ? { turns } : {}),
-      stopped: { source: SOURCE, status: obs.status, reason: obs.endReason } };
+      stopped: { source: SOURCE, status: obs.status, reason: obs.endReason,
+        idle: obs.status === "ended" && obs.endReason === IDLE_END_REASON } };
   }
   let prompt: string | null = null;
   if (obs.status === "waiting-on-prompt") {

@@ -10,6 +10,12 @@
 // the owner opens by hand, one spawned into a worktree of this repo -- and without
 // that check the newcomer would silently become sous chef and wake-ups would
 // start going to it instead.
+//
+// state/chef-resume.json is the off switch for the watcher resuming sous chef after Claude
+// Code stops it for being idle (watch.ts, `resumeChef`): {"on": false, "changed_at": ...,
+// "by": "sc chef off"}. No file means on. `sc chef off` and `sc chef on` write it, and
+// `souschef` turns it back on. It is a file of its own, not part of chef.json (which every
+// start, resume and compaction rewrites) or watch.json (which the watcher rewrites every cycle).
 
 import path from "node:path";
 import { run } from "./proc.js";
@@ -17,6 +23,36 @@ import { Dict, get, or, splitWs, truthy } from "./py.js";
 import * as runtimes from "./runtimes/index.js";
 import { Listing, Status, WakeError } from "./runtimes/index.js";
 import { CODE_ROOT, now, readJson, SCError, stateDir, writeJson } from "./util.js";
+
+export function resumeSwitchPath(): string {
+  return path.join(stateDir(), "chef-resume.json");
+}
+
+export interface ResumeSwitch {
+  on: boolean;
+  changed_at: number | null;
+  by: string | null;
+}
+
+/** Whether the watcher may resume sous chef after an idle stop. On unless switched off. */
+export function resumeSwitch(): ResumeSwitch {
+  const d = readJson<Dict>(resumeSwitchPath(), {}) ?? {};
+  return { on: d.on !== false, changed_at: get<number | null>(d, "changed_at", null), by: get<string | null>(d, "by", null) };
+}
+
+/** Turn it on or off; returns the setting it replaced. */
+export function setResumeSwitch(on: boolean, by: string): ResumeSwitch {
+  const prev = resumeSwitch();
+  writeJson(resumeSwitchPath(), { on, changed_at: now(), by });
+  return prev;
+}
+
+/** The environment sous chef's own session is started or resumed with: this one, without SC_TEST_HOME. */
+export function sessionEnv(): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(process.env)) if (k !== "SC_TEST_HOME" && v !== undefined) out[k] = v;
+  return out;
+}
 
 export interface ChefInfo extends Dict {
   session_id: string;

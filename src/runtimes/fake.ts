@@ -15,7 +15,8 @@
 // [name, cwd], so a test can see which working directory was checked.
 //
 // Sous chef's own session (souschef runs on this runtime when SC_CHEF_RUNTIME is fake):
-//   "chef_alive": false makes wakeSessionId fail, as when sous chef is not running.
+//   "chef_alive": false makes wakeSessionId fail, as when sous chef is not running, and so
+//     does a row for the session with "alive" false.
 //   startNamed adds sessions["fake-chef-<n>"] = {"alive": true, "busy": false, "pid": 1,
 //     "kind": "background", "id": "chef-<n>", "name", "launch_prompt", "cwd", "permissions"}
 //     (n counts from 1) and returns "chef-<n>".
@@ -26,6 +27,11 @@
 //   attachExec prints "fake attach <short id>" and returns: nothing is attached.
 // Tests model a sous chef open in a terminal with "pid" and "kind": "interactive", and a
 // stopped one with no "pid", as `claude agents` lists them.
+// A stopped session (any row with "alive" false) may carry "end_reason": its status then
+// says it ended for that reason, and "end_reason": "idle" is an idle stop (Stopped.idle).
+// "forgotten": true models a session the tool no longer knows (as Porch forgets an ended
+// session a day later): its status says "not found".
+// resumeSessionId clears it and appends the session id to "chef_resumes".
 
 import path from "node:path";
 import { Dict, get, or, truthy } from "../py.js";
@@ -50,7 +56,15 @@ function save(data: FakeData): void {
 }
 
 function statusOf(s: Dict | undefined): Status {
-  if (!s || !truthy(s.alive)) return { alive: false, busy: null, pid: null, prompt: null, activity: null };
+  if (!s || !truthy(s.alive)) {
+    const reason = s ? get<string | null>(s, "end_reason", null) : null;
+    if (s && truthy(s.forgotten)) {
+      return { alive: false, busy: null, pid: null, prompt: null, activity: null,
+        stopped: { source: "The fake runtime", status: "not found", reason: null, idle: false } };
+    }
+    return { alive: false, busy: null, pid: null, prompt: null, activity: null,
+      ...(reason ? { stopped: { source: "The fake runtime", status: "ended", reason, idle: reason === "idle" } } : {}) };
+  }
   const prompt = get<string | null>(s, "prompt", null);
   return { alive: true, busy: truthy(prompt) ? true : get<boolean | null>(s, "busy", false), pid: 1, prompt,
     activity: get(s, "activity", null) };
@@ -108,10 +122,11 @@ export const fake: Runtime = {
     return statusOf(row(r, sessionId));
   },
 
-  async wakeSessionId(_sessionId, text) {
+  async wakeSessionId(sessionId, text) {
     const data = load();
     const chef = get(data, "chef_alive", true);
-    if (!truthy(chef)) throw new WakeError("chef not running");
+    const r = row(data.sessions, sessionId);
+    if (!truthy(chef) || (r && !truthy(r.alive))) throw new WakeError("chef not running");
     data.wakes.push(["chef", text]);
     save(data);
   },
@@ -141,6 +156,9 @@ export const fake: Runtime = {
     const r = (data.sessions[sessionId] ??= { kind: "background" });
     r.alive = true;
     r.pid = 1;
+    delete r.end_reason;
+    delete r.forgotten;
+    ((data.chef_resumes ??= []) as unknown[]).push(sessionId);
     if (!Object.hasOwn(r, "id")) r.id = sessionId.slice(0, 8);
     save(data);
     return r.id as string;

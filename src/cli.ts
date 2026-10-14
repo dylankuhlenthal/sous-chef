@@ -437,12 +437,21 @@ async function cmdWatch(args: Args): Promise<number | void> {
       else printErr(line);
     }
     print(result.running ? "watcher running" : "watcher failed to start; see state/watch.log");
+    print(watch.chefResumeLine());
     return;
   }
   return watch.runForever();
 }
 
 async function cmdChef(args: Args): Promise<void> {
+  if (args.action === "on" || args.action === "off") {
+    if (args.take) throw new SCError("--take cannot be combined with on or off");
+    const on = args.action === "on";
+    const prev = chef.setResumeSwitch(on, `sc chef ${String(args.action)}`);
+    print(prev.on === on ? `already ${String(args.action)}; nothing changed` : `switched ${String(args.action)}`);
+    print(watch.chefResumeLine());
+    return;
+  }
   if (args.take) {
     const claudeSid = process.env.CLAUDE_CODE_SESSION_ID;
     if (!claudeSid) {
@@ -477,6 +486,7 @@ async function cmdChef(args: Args): Promise<void> {
     print("  NOT running, so wake-ups cannot reach it; events wait on disk until it starts " +
       "(`souschef`), and `sc events` still lists them");
   }
+  print(watch.chefResumeLine());
 }
 
 // --- session commands ------------------------------------------------------
@@ -629,7 +639,9 @@ const COMMANDS: (Command & { fn: (args: Args) => Promise<number | void> })[] = [
     { flags: ["--runtime"], dest: "runtime", hidden: true },
   ] },
   { name: "summary", help: "print the startup summary", fn: cmdSummary, args: [] },
-  { name: "chef", help: "show which Claude session is registered as sous chef", fn: cmdChef, args: [
+  { name: "chef", help: "show which Claude session is registered as sous chef; on|off: whether the watcher " +
+      "resumes it after Claude Code stops it for being idle (only when the owner asks)", fn: cmdChef, args: [
+    { dest: "action", nargs: "?", choices: ["on", "off"] },
     { flags: ["--take"], dest: "take", action: "store_true",
       help: "make THIS session sous chef, even if a running one holds it" },
   ] },
