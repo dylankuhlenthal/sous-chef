@@ -277,7 +277,7 @@ export async function cycle(): Promise<{ actions: string[] }> {
     }
   }
 
-  await chefGate.look(listings);
+  actions.push(...await chefGate.look(listings));
 
   // 6. scheduled jobs, then the cron log's unread events, delivered only while sous chef is idle.
   // Jobs fire only while sous chef runs, so a job due while it is stopped for being idle resumes it first.
@@ -381,18 +381,18 @@ class ChefGate {
    * would never be resumed. A stopped session cannot stop again without running first, so
    * whatever the runtime says about it after an idle stop is the same stop.
    */
-  async look(listings: Map<string, Listing | null>): Promise<void> {
+  async look(listings: Map<string, Listing | null>): Promise<string[]> {
     const info = chef.current();
-    if (!info || !truthy(info.session_id)) return;
-    const rt = runtimes.get(info.runtime);
+    if (!info || !truthy(info.session_id)) return [];
     try {
+      const rt = runtimes.get(info.runtime);
       if (!listings.has(info.runtime)) listings.set(info.runtime, await rt.listing());
       const rows = listings.get(info.runtime);
       this.st = rows ? await rt.statusSessionId(info.session_id, rows) : null;
-    } catch (e) {
-      if (!(e instanceof SCError)) throw e;
-      listings.set(info.runtime, null);
-      this.st = null; // a failed listing tells nothing: never a reason to resume, nor to forget
+    } catch (e) { // never stops the cycle. A failed listing tells nothing: never a reason to resume, nor to forget
+      if (!listings.has(info.runtime)) listings.set(info.runtime, null);
+      this.st = null;
+      return e instanceof SCError ? [] : [`sous chef: could not read its status: ${errorText(e)}`];
     }
     const remembered = get<Dict | null>(this.s, "idle_stop", null);
     if (remembered && remembered.session_id !== info.session_id) delete this.s.idle_stop; // another session registered
@@ -402,6 +402,7 @@ class ChefGate {
     } else if (this.st?.stopped?.idle && !truthy(get(this.s, "idle_stop", null))) {
       this.s.idle_stop = { session_id: info.session_id, seen_at: this.pollNow };
     }
+    return [];
   }
 
   async resume(why: string): Promise<string[]> {
