@@ -96,7 +96,9 @@ Running `claude` in `~/.sous-chef` also works and registers that session as sous
 ## Stop sous chef fully
 
 1. `sc chef` shows the registered sous chef session and its short id. `claude stop <short id>` stops it; its conversation is kept.
-2. Stop the watcher: `kill $(cat ~/.sous-chef/my/state/watch.pid)`. It stops between cycles. Without this it keeps running and keeps writing events, but cannot wake sous chef, and scheduled jobs do not fire while sous chef is stopped.
+2. Stop the watcher: `kill $(cat ~/.sous-chef/my/state/watch.pid)`. It stops between cycles. Without this it keeps running and keeps writing events, but cannot wake sous chef, and scheduled jobs do not fire while sous chef is stopped. The watcher never undoes a `claude stop`: it resumes sous chef only after Claude Code stopped it for being idle.
+
+To keep the watcher running but stop it resuming sous chef after an idle stop, run `sc chef off`; `sc chef on`, or the next `souschef`, turns it back on. See "Resuming sous chef itself" in `docs/domains/watcher.md`.
 
 Sessions sous chef launched keep running; `sc sessions` lists them and `sc stop <id>` stops one.
 
@@ -139,7 +141,7 @@ A session reported something and sous chef never mentioned it. Work from the dur
 
 1. **Is it on disk?** `sc status <id> -n 50`, or read `my/state/sessions/<id>/events.jsonl`. If the event is not there, the session never reported it: look at the session itself (`claude logs <short id>`).
 2. **Does sous chef still owe it?** `sc events`. If the event is on disk but not listed here, sous chef has already acknowledged it.
-3. **Can the wake-up reach sous chef?** `sc chef` prints the registered session; it needs a `pid` in `claude agents --json`. Without one, wake-ups quietly fail and events wait on disk.
+3. **Can the wake-up reach sous chef?** `sc chef` prints the registered session; it needs a `pid` in `claude agents --json`. Without one, wake-ups quietly fail and events wait on disk. When Claude Code stopped it for being idle, the watcher resumes it as soon as there is work; `sc chef` also shows whether that is switched on and what the watcher last did about it (for example a limit it reached), and `my/state/watch.log` has each step (`sous chef: ...`).
 4. **Is the watcher running?** Top of `sc summary`, or `my/state/watch.log`. The watcher is what retries a lost wake-up, so without it one lost wake-up is never retried.
 5. **Did a hook fail?** `my/state/hook-errors.log` (or the core's `state/hook-errors.log` when there is no data folder). Hooks never fail the session they run in, so their errors appear nowhere else.
 
@@ -190,7 +192,7 @@ To try the whole flow with real sessions without touching real state, make a thr
 | `[sync] sync-stopped` in `sc events` | The watcher stopped pushing the data folder. After a conflict: rebase or merge by hand in the data folder (`git -C ~/.sous-chef/my status`); syncing starts again by itself once the checked-out commit changes. After failed pushes: usually offline; it starts again once a fetch works. `docs/domains/watcher.md`, check 9 |
 | Summary says the watcher is not running | `sc watch --ensure`, then `my/state/watch.log` |
 | Summary says the watcher is not on current code | `sc watch --ensure` replaces it and says what it did; if it could not, `my/state/watch.log`. A watcher on the current code restarts itself after a code change, so this means one started by older code, or new code that does not load (the log says which) |
-| Sous chef is not woken by sessions | `sc chef` shows the registered session; it must be running (`claude agents`). Events are still on disk: `sc events` |
+| Sous chef is not woken by sessions | `sc chef` shows the registered session; it must be running (`claude agents`). After an idle stop the watcher resumes it when there is work, unless `sc chef` shows it switched off or a limit reached. Events are still on disk: `sc events` |
 | A session never picks up messages | `sc status <id>` (running? unhandled messages?), `claude logs <short id>` |
 | `sc spawn` says the session did not start | The error includes Claude Code's output; a common cause is an expired login (`/login`) |
 | A hook seems to do nothing | `my/state/hook-errors.log`; hooks never fail the session they run in, so errors only appear there |

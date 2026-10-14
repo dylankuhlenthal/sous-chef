@@ -1,6 +1,6 @@
 # Cron: scheduled jobs
 
-A cron job is a task that runs on a schedule, for example "read the owner's email at 09:00 and 16:00". The watcher fires jobs, so a job only runs while sous chef is running. Each job says who does the task: sous chef itself, or a session launched for it (a worker). When a job fires, its task goes to that target as a message, the way messages already travel: written to disk first, then the target is woken if it is idle, or left to pick the message up when its current turn ends.
+A cron job is a task that runs on a schedule, for example "read the owner's email at 09:00 and 16:00". The watcher fires jobs, so a job only runs while sous chef is running (a job due while Claude Code has stopped sous chef for being idle resumes it first; see "Resuming sous chef itself" in `docs/domains/watcher.md`). Each job says who does the task: sous chef itself, or a session launched for it (a worker). When a job fires, its task goes to that target as a message, the way messages already travel: written to disk first, then the target is woken if it is idle, or left to pick the message up when its current turn ends.
 
 Code: `src/cron.ts` (`add`, `remove`, `load`, `validate`, `isDue`, `fire`, `runNow`, `tick`), `src/watch.ts` (`cycle`, `rewakeDue`), `src/events.ts` (`CRON_LOG`), `src/ops.ts` (`send`, `spawn`, `report`, `checkCwd`, `checkSkill`), `src/chef.ts` (`status`), `src/cli.ts` (`cmdCron`, `cronBlocker`, `cmdEvents`), `src/watch.ts` (`health`), `src/summary.ts` (`cronLines`), `templates/cron-worker.md`. Why it runs inside the watcher: decision 0009 (scheduled jobs run inside the watcher).
 
@@ -98,7 +98,7 @@ Each message is on disk and visible, and none is lost.
 
 ## Missed firings
 
-Jobs are missed whenever sous chef is not running (the owner's rule: jobs only run while sous chef does). `cron.tick` checks the registered sous chef session is running (`chef.liveIncumbent`) before firing anything; if it is not, nothing is marked as handled, and the watcher log says so once per job.
+Jobs are missed whenever sous chef is not running (the owner's rule: jobs only run while sous chef does). `cron.tick` checks the registered sous chef session is running (`chef.liveIncumbent`) before firing anything; if it is not, nothing is marked as handled, and the watcher log says so once per job. Before `cron.tick`, the watcher asks which jobs are due (`cron.dueJobs`, which reads the run record and changes nothing) and, if any are and Claude Code stopped sous chef for being idle, resumes sous chef, so those jobs fire in the same cycle. A sous chef stopped any other way (`claude stop`, or switched off with `sc chef off`) still holds every job.
 
 When sous chef is back, a job that missed one or more slots **fires once** (the owner's ruling). Only the latest slot is compared with the last one handled, so a job missed for three days fires once, not six times. For an email check, one catch-up run reads everything that arrived meanwhile, and six runs would only repeat it.
 

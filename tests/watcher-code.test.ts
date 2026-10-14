@@ -78,7 +78,8 @@ describe("WatcherCodeTests", () => {
     await t.copySc(["watch", "--ensure"]);
     const pid = t.pid();
     const out = await t.copySc(["watch", "--ensure"]);
-    expect(out.stdout.trim()).toEqual("watcher running");
+    expect(out.stdout.trim().split("\n")).toEqual(["watcher running", "the watcher resumes sous chef after Claude Code " +
+      "stops it for being idle, when there is work: on; `sc chef off` turns it off"]);
     expect(t.pid()).toEqual(pid);
   });
 });

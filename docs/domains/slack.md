@@ -63,7 +63,7 @@ The watcher collects the owner's messages from the relay on every cycle (`slack.
 
 1. It labels the message (below) and writes it to the slack log, `state/slack/events.jsonl` (`events.SLACK_LOG`), with the relay's full envelope saved beside it in `state/slack/envelopes/`.
 2. Only then does it acknowledge the message to the relay (`POST /v1/inbox/ack`), which deletes it there.
-3. It wakes sous chef in the same cycle, whether sous chef is idle or mid-turn. Claude Code holds a wake-up for a busy session until its next step, so this does not cut a turn short. The watcher then retries with the usual back-off until the slack log is acknowledged.
+3. It wakes sous chef in the same cycle, whether sous chef is idle or mid-turn, after resuming it if Claude Code stopped it for being idle ("Resuming sous chef itself" in `docs/domains/watcher.md`). Claude Code holds a wake-up for a busy session until its next step, so this does not cut a turn short. The watcher then retries with the usual back-off until the slack log is acknowledged.
 
 If the watcher dies between writing and acknowledging, the relay still has the message, and the next poll finds it already in the slack log, skips it and acknowledges it again, so it lands once. Messages are matched by Slack's own ids (conversation and message), not the relay's queue id, so the match survives the relay's database being replaced, which moving it to Railway would do.
 

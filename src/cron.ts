@@ -383,6 +383,19 @@ async function archiveEmptyWorkers(data: Record<string, Run>, actions: string[])
 }
 
 /**
+ * The jobs due now, read without the lock and changing nothing. The watcher asks before
+ * `tick`, so that a job due while Claude Code has stopped sous chef for being idle resumes it
+ * (watch.ts, `ChefGate`) and then fires in the same cycle. `tick` decides what fires.
+ */
+export function dueJobs(): string[] {
+  const [jobs] = allJobs();
+  if (!jobs.length) return [];
+  const data = runs();
+  const t = now();
+  return jobs.filter((j) => Object.hasOwn(data, j.name) && isDue(j, data[j.name]!, t)).map((j) => j.name);
+}
+
+/**
  * One watcher cycle's worth of cron: tidy empty runs, then fire what is due.
  *
  * Returns {actions}. Waking sous chef for the cron log is the watcher's job.

@@ -116,6 +116,51 @@ describe("the watcher on Porch", () => {
   });
 });
 
+// Sous chef's own session on the Claude runtime: resumed with `claude --bg --resume <id>` and
+// no other flag (any flag starts a copy), only when Porch says Claude Code stopped it for being idle.
+describe("the watcher resuming sous chef on Porch", () => {
+  const CHEF = "99999999-8888-7777-6666-555555555555";
+  const CHEF_SHORT = "ce99f00d";
+
+  async function chefEnded(reason: string) {
+    writeJson(path.join(process.env.SC_TEST_HOME!, "state", "chef.json"), { session_id: CHEF, runtime: "claude-bg", registered_at: now() });
+    stub.write({ resumable: {
+      [SID]: { id: SHORT, sessionId: SID, name: "sc-general-x", kind: "background", status: "idle" },
+      [CHEF]: { id: CHEF_SHORT, sessionId: CHEF, name: "sous-chef", kind: "background", status: "idle" } } });
+    // An hour ago, not T: Porch drops an ended record a day after it ended.
+    const recent = new Date(Date.now() - 3600_000).toISOString();
+    await store.updateInside("claude", CHEF, { pid: 999, status: "idle", lastTurnEnd: recent, data: { shortId: CHEF_SHORT } });
+    await store.updateInside("claude", CHEF, { status: "ended", endedAt: recent, endReason: reason });
+    await session({}, null); // not running and waiting on the agent: a gone event, so there is work for sous chef
+  }
+  const chefResumes = () => stub.read().calls.filter((c) => c.includes("--resume") && c.includes(CHEF));
+
+  it("resumes it after an idle stop when there is work, with --resume and no other flag", async () => {
+    await chefEnded("idle");
+    const { actions } = await cycle();
+    expect(chefResumes()).toEqual([["--bg", "--resume", CHEF]]);
+    expect(actions).toContain(`sous chef: resumed (${CHEF_SHORT}) after Claude Code stopped it for being idle ` +
+      "(1 of at most 24 in 24 hours), for: sessions need attention (general-x-1234)");
+  });
+
+  it("still resumes it after Porch has forgotten the ended session, when the watcher saw the idle stop", async () => {
+    await chefEnded("idle");
+    fs.rmSync(path.join(process.env.SC_TEST_HOME!, "state", "sessions", "general-x-1234"), { recursive: true });
+    await cycle(); // no work: the idle stop is seen and remembered
+    fs.rmSync(store.recordPath("claude", CHEF)); // what Porch does a day after it ended
+    await session({}, null);
+    await cycle();
+    expect(chefResumes()).toEqual([["--bg", "--resume", CHEF]]);
+  });
+
+  it("leaves it stopped after claude stop (Porch: ended, reason other)", async () => {
+    await chefEnded("other");
+    const { actions } = await cycle();
+    expect(chefResumes()).toEqual([]);
+    expect(actions).toContain("woke sous chef: False");
+  });
+});
+
 // Turn times: a session launched through Porch has them in Porch's record and no
 // turns.json; one launched before has only turns.json. The watcher and `sc status` use
 // the runtime's when it has them, so sessions launched before the switch-over keep working.
@@ -200,7 +245,7 @@ describe("words that come from the runtime, not the watcher or sc report", () =>
   it("names the runtime's own source in the gone event", async () => {
     await fakeSession();
     const spy = vi.spyOn(fakeRt, "status").mockResolvedValue({ alive: false, busy: null, pid: null, prompt: null,
-      activity: null, stopped: { source: "Other tool", status: "exited", reason: "crashed" } });
+      activity: null, stopped: { source: "Other tool", status: "exited", reason: "crashed", idle: false } });
     try {
       await cycle();
     } finally {

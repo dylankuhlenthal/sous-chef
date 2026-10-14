@@ -13,6 +13,9 @@
 // owner.json, `auto` when unset; docs/decisions/0031). A resumed one keeps the mode it
 // was started with, so a changed setting takes effect with `souschef --new`.
 //
+// Every run turns back on the watcher's resume of sous chef after an idle stop, in case
+// `sc chef off` turned it off (docs/domains/watcher.md, "Resuming sous chef itself").
+//
 // `souschef --new` stops the registered background session (its conversation is
 // kept) and starts a fresh one. `souschef --print` does everything except attach
 // and prints the attach command instead.
@@ -65,11 +68,7 @@ function runtime(): runtimes.Runtime {
   return runtimes.get(process.env.SC_CHEF_RUNTIME || runtimes.DEFAULT);
 }
 
-function env(): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(process.env)) if (k !== "SC_TEST_HOME" && v !== undefined) out[k] = v;
-  return out;
-}
+const env = chef.sessionEnv;
 
 function pyStr(x: unknown): string {
   return x === null || x === undefined ? "None" : String(x);
@@ -92,6 +91,10 @@ export async function main(argv: string[]): Promise<number> {
     throw e;
   }
   try {
+    // Opening sous chef by hand turns the watcher's resume after an idle stop back on.
+    if (!chef.setResumeSwitch(true, "souschef").on) {
+      print("the watcher resumes sous chef after an idle stop again (it was off; `sc chef off` turns it off)");
+    }
     const rt = runtime();
     const info = chef.current();
     const rows = await rt.listing();
