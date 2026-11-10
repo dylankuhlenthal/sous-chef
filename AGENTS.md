@@ -14,7 +14,7 @@ Any Claude Code session started in this folder is sous chef: its SessionStart ho
 
 ## Stack
 
-TypeScript on Node 22 or later (`src/`, compiled into `dist/`), with two runtime dependencies: Porch (how sous chef reaches Claude sessions, from npm as `@dylankuhlenthal/porch`) and `proper-lockfile`. Claude Code background sessions (`claude --bg`), Claude Code hooks, markdown memory files.
+TypeScript on Node 22 or later (`src/`, compiled into `dist/`), with three runtime dependencies: Porch (how sous chef reaches Claude sessions, from npm as `@dylankuhlenthal/porch`), `proper-lockfile`, and agent-login (signs sessions in to websites, from its GitHub repo; `docs/domains/agent-login.md`). Claude Code background sessions (`claude --bg`), Claude Code hooks, markdown memory files.
 
 ## Layout & filing
 
@@ -22,7 +22,7 @@ Sous chef is two folders. This one is the **core**: the shared code, the same fo
 
 The core:
 
-- `bin/sc`, `src/`: the `sc` command. Run `sc --help`. `bin/sc` and `bin/souschef` (how the owner opens you from any terminal) are small launchers: they check Node and the build, then run the compiled code in `dist/` (gitignored), which `npm run build` makes from `src/`. They refuse a build that is missing or older than `src/`, with the command that fixes it. `package.json` lists the dependencies and scripts. `install.sh`: sets up an install (it brings the dependencies and the build up to date, then runs `sc setup`); piped from the web, it clones the core first.
+- `bin/sc`, `src/`: the `sc` command. Run `sc --help`. `bin/sc` and `bin/souschef` (how the owner opens you from any terminal) are small launchers: they check Node and the build, then run the compiled code in `dist/` (gitignored), which `npm run build` makes from `src/`. They refuse a build that is missing or older than `src/`, with the command that fixes it. `package.json` lists the dependencies and scripts; `.npmrc` lets npm fetch agent-login, the one dependency taken from GitHub. `install.sh`: sets up an install (it brings the dependencies and the build up to date, then runs `sc setup`); piped from the web, it clones the core first.
 - `kinds/`: the core kinds, one file per session kind. `templates/worker-brief.md`: the instructions every session gets.
 - `docs/`: how sous chef works, filed by the documentation standards in `docs/patterns/documentation.md` (read it before changing docs). `tests/`: the test suite.
 - `README.md`, `LICENSE` (MIT), `SECURITY.md`, `CONTRIBUTING.md`: for people reading the public repo. `assets/`: the icon at the top of the README. `.github/`: the CI workflow and the branch ruleset on `main` (`docs/operations/going-public.md`).
@@ -191,6 +191,8 @@ Any session started in this folder or a worktree of it runs the `chef-start` hoo
 ### What sessions can use
 
 A session runs as you do, with the owner's own Claude Code setup: skills, MCP servers, global instructions and command line tools. This was checked by asking a real session (`docs/domains/sessions.md`, "What a session inherits"). So a kind can tell a session to run one of the owner's skills. A kind declares that skill in its `skill` field: `sc spawn` refuses the kind when the skill is missing, and `sc kinds` shows whether it is found. The brief tells every session to report `blocked` when a skill or tool it needs is not available.
+
+Every install also gives sessions agent-login, which signs in to a website as an agent account without the session seeing the password: `sc setup` links its command and its `agent-login` skill. Signing in only works once the owner has set up 1Password for it, which is optional; `sc setup` says whether they have. When a session reports it cannot sign in for that reason, tell the owner, with the link setup prints. Details: `docs/domains/agent-login.md`.
 
 Sessions launch in their kind's permission mode (`auto` for a kind that names none) unless `sc spawn --permissions` chose another; `sc status <id>` shows which. When `souschef` started you, you run in the permission mode the owner chose (`sc owner` shows it; decision 0031). In `bypass` nothing you do waits for the owner, so your instructions are the only check; in `auto` an action Claude Code's classifier judges risky waits at a prompt, and nobody is told unless the owner is attached.
 

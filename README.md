@@ -48,7 +48,7 @@ This attaches to sous chef, resuming or starting it first if it is not running. 
 - [docs/architecture.md](docs/architecture.md): how it fits together, and its known limits.
 - [docs/operations/running.md](docs/operations/running.md): installing, starting, testing, troubleshooting.
 - [docs/operations/going-public.md](docs/operations/going-public.md): the maintainer's one-off steps for making this repo public.
-- `docs/domains/`: sessions, messaging, the watcher, scheduled jobs (cron), memory, Slack, the context check.
+- `docs/domains/`: sessions, messaging, the watcher, scheduled jobs (cron), memory, Slack, the context check, agent-login (signing sessions in to websites).
 - `docs/patterns/`: adding a kind, adding a runtime, documentation standards.
 - `docs/decisions/`: why it is built this way.
 

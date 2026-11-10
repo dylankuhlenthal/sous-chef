@@ -12,7 +12,9 @@ The **data folder** is the owner's own: their memory, cron jobs, kinds, owner fi
 
 The core reaches the data folder through one link, `<core>/my` (gitignored). `util.home()` returns that path, through the link and not resolved, so paths written into briefs stay valid if the data folder moves and the link is re-pointed. Without a usable link, every command that needs data refuses and names the fix: no link means run `install.sh`; a broken link names its target. Help, the hooks and `sc setup` work without it. Tests point the data at a temporary folder with `SC_TEST_HOME` instead. Why it is built this way: decision 0020 (the core and the owner's data are separate repos joined by one link).
 
-`install.sh` checks `node` (22 or later), `npm`, `git` and `claude`, brings the install up to date (runs `npm ci` when the dependencies are missing or older than `package-lock.json`, and `npm run build` when the build is missing or stale), then runs `sc setup` (`src/setup.ts`), which makes or connects the data folder and the link; see `docs/operations/running.md`.
+`install.sh` checks `node` (22 or later), `npm`, `git` and `claude`, brings the install up to date (runs `npm ci` when the dependencies are missing or older than `package-lock.json`, and `npm run build` when the build is missing or stale), then runs `sc setup` (`src/setup.ts`), which makes or connects the data folder and the link, and links agent-login's command and skill; see `docs/operations/running.md`.
+
+agent-login, which lets a session sign in to a website without seeing the password, ships with the core as a dependency from its own repo; using it needs the owner's own 1Password setup, which is optional. See `docs/domains/agent-login.md`.
 
 ## The parts
 
