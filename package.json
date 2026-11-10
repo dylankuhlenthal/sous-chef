@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@dylankuhlenthal/porch": "^0.2.0",
+    "agent-login": "github:dylankuhlenthal/agent-login#d28ea81c359dfce29f6265ae4d62812421f953ce",
     "proper-lockfile": "^4.1.2"
   },
   "devDependencies": {
@@ -30,5 +31,8 @@
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.71.0",
     "vitest": "^5.0.2"
+  },
+  "allowScripts": {
+    "github:dylankuhlenthal/agent-login#d28ea81c359dfce29f6265ae4d62812421f953ce": true
   }
 }

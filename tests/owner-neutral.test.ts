@@ -49,6 +49,9 @@ const PORCH_PACKAGE = /@dylankuhlenthal\/porch\b/g;
 // The core's own GitHub repo (the clone URL and the install script's raw URL) carries the
 // same account; only that exact repo path is allowed, anywhere.
 const CORE_REPO = /\bdylankuhlenthal\/sous-chef\b/g;
+// agent-login, which ships with sous chef as a dependency from its GitHub repo: only that exact
+// repo path is allowed, anywhere.
+const AGENT_LOGIN_REPO = /\bdylankuhlenthal\/agent-login\b/g;
 
 /** Lines as Python's str.splitlines() splits them. */
 const LINE_BREAKS = new Set(["\n", "\r", "\v", "\f", "\x1c", "\x1d", "\x1e", "\x85", "\u2028", "\u2029"]);
@@ -111,7 +114,7 @@ describe("OwnerNeutralTests", () => {
       const text = readText(path.join(ROOT, rel));
       if (text === null) continue;
       splitlines(text).forEach((line, i) => {
-        const checked = line.replace(PORCH_PACKAGE, "").replace(CORE_REPO, "");
+        const checked = line.replace(PORCH_PACKAGE, "").replace(CORE_REPO, "").replace(AGENT_LOGIN_REPO, "");
         if (SEARCH.test(checked) && !allowed.has(JSON.stringify([rel, line.trim()]))) {
           found.push(`${rel}:${i + 1}: ${line.trim().slice(0, 120)}`);
         }
