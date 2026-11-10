@@ -57,6 +57,8 @@ cd ~/.sous-chef && git pull && { git diff --quiet ORIG_HEAD HEAD -- package-lock
 
 The watcher notices the new build between cycles and restarts on it (`docs/domains/watcher.md`).
 
+The update step installs and builds, but makes no links. When a pull brings something `sc setup` links, run `sc setup --data <your data folder> --yes` once more after it (the folder `my` points to); it only adds what is missing. So far that is agent-login: an install from before it shipped gets its command and skill only after that run (`docs/domains/agent-login.md`, "Existing installs").
+
 **Known limit: hooks find Node through `PATH`.** Hook commands written into a session's settings name the Node that ran `sc` (`process.execPath`), so they do not depend on `PATH`. But sous chef's own hooks in `.agents/settings.json`, and hook commands saved by sessions started before the core moved to TypeScript, run `bin/sc` directly, and its first line (`#!/usr/bin/env node`) finds `node` on `PATH`. Claude Code's background processes on the development Mac carry a `PATH` with Node 22 (seen 2026-10-01). If they did not, those hooks would fail to start, and Claude Code would show a hook error. The other side of the same limit: removing or replacing the Node version that ran `sc` breaks the hook commands of sessions launched with it (they name it by path) until sous chef is restarted (`souschef --new`) and those sessions are relaunched. Lifting it would mean launchers that fall back to a Node path recorded at install.
 
 ### Moving the data folder
