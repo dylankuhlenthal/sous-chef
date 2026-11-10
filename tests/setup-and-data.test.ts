@@ -70,6 +70,8 @@ describe("SetupTests", () => {
   let bin: string;
   let stubs: string;
   let env: Env;
+  let claudeConfig: string;
+  let userHome: string;
   beforeEach(() => {
     t = new CodeCopyTest();
     data = path.join(t.tmp, "data");
@@ -78,7 +80,13 @@ describe("SetupTests", () => {
     fs.mkdirSync(stubs);
     fs.writeFileSync(path.join(stubs, "claude"), "#!/bin/sh\nexit 0\n");
     fs.chmodSync(path.join(stubs, "claude"), 0o755);
-    env = { SC_TEST_HOME: "", ...GIT_ENV, PATH: `${stubs}:${process.env.PATH}` };
+    // Setup links agent-login's skill into Claude Code's skills folder and reads agent-login's
+    // settings from the home folder, so both are the test's own, never the real ones.
+    claudeConfig = path.join(t.tmp, "claude-config");
+    userHome = path.join(t.tmp, "user-home");
+    fs.mkdirSync(userHome);
+    env = { SC_TEST_HOME: "", ...GIT_ENV, PATH: `${stubs}:${process.env.PATH}`, HOME: userHome,
+      CLAUDE_CONFIG_DIR: claudeConfig, AGENT_LOGIN_CONFIG: "", AGENT_LOGIN_VAULT: "", AGENT_LOGIN_TOKEN_FILE: "" };
   });
   afterEach(() => t.cleanup());
 
@@ -122,6 +130,56 @@ describe("SetupTests", () => {
     const sid = words((await t.copySc(["spawn", "--kind", "general", "--title", "t", "--cwd", t.work, "--runtime",
       "fake"], { stdin: "do it", env })).stdout)[1]!;
     expect(read(path.join(data, "state", "sessions", sid, "brief.md"))).not.toContain("Instructions from your owner");
+  });
+
+  it("agent-login's command and skill are linked from the installed package", async () => {
+    const out = (await install(["--name", "Sam", "--no-git"])).stdout;
+    const pkg = path.join(fs.realpathSync(t.code), "node_modules", "agent-login");
+    expect(fs.readlinkSync(path.join(bin, "agent-login"))).toBe(path.join(pkg, "bin", "agent-login"));
+    expect(fs.readlinkSync(path.join(claudeConfig, "skills", "agent-login"))).toBe(path.join(pkg, "skills", "agent-login"));
+    expect(out).toContain("agent-login: not set up for 1Password (no vault chosen, the token file " +
+      `${path.join(userHome, ".config", "agent-login", "op-token")} is missing or empty)`);
+    // The linked command runs, and sessions sous chef starts find the skill.
+    const help = await run(path.join(bin, "agent-login"), ["--help"], { env: { ...t.baseEnv, ...env } });
+    expect(help.code).toBe(0);
+    expect(help.stdout.startsWith("usage:")).toBe(true);
+    fs.writeFileSync(path.join(data, "kinds", "browse.md"),
+      "---\ndescription: work in a website\nskill: agent-login\n---\nRun the `/agent-login` skill.\n");
+    const kinds = (await t.copySc(["kinds"], { env })).stdout;
+    expect(kinds).toContain("skill: agent-login");
+    expect(kinds).not.toContain("not found");
+  });
+
+  it("agent-login's status says 1Password is set up from its config file, looking only at the token's size", async () => {
+    const config = path.join(userHome, ".config", "agent-login");
+    fs.mkdirSync(config, { recursive: true });
+    const token = path.join(t.tmp, "token");
+    fs.writeFileSync(path.join(config, "config.json"), JSON.stringify({ vault: "Agents", tokenFile: token }));
+    fs.writeFileSync(token, "");
+    expect((await install(["--name", "Sam", "--no-git"])).stdout).toContain(`the token file ${token} is missing or empty`);
+    fs.writeFileSync(token, "ops_not-a-real-token\n");
+    const out = (await install()).stdout;
+    expect(out).toContain("agent-login: 1Password is set up");
+    expect(out).not.toContain("ops_not-a-real-token");
+    expect((await install([], { env: { AGENT_LOGIN_CONFIG: path.join(t.tmp, "nowhere.json") } })).stdout)
+      .toContain("no vault chosen");
+    fs.writeFileSync(path.join(config, "config.json"), "{ not json");
+    expect((await install()).stdout).toContain(`its config file ${path.join(config, "config.json")} cannot be read`);
+  });
+
+  it("an agent-login command or skill already in place is left alone", async () => {
+    const own = path.join(t.tmp, "own-agent-login");
+    fs.mkdirSync(path.join(own, "skills", "agent-login"), { recursive: true });
+    fs.writeFileSync(path.join(own, "agent-login"), "#!/bin/sh\n", { mode: 0o755 });
+    fs.mkdirSync(bin, { recursive: true });
+    fs.symlinkSync(path.join(own, "agent-login"), path.join(bin, "agent-login"));
+    fs.mkdirSync(path.join(claudeConfig, "skills", "agent-login"), { recursive: true });
+    const out = (await install(["--name", "Sam", "--no-git"])).stdout;
+    expect(out).toContain(`left ${path.join(bin, "agent-login")} alone: it points to ${path.join(own, "agent-login")}, ` +
+      "not the agent-login that ships with sous chef");
+    expect(out).toContain(`left ${path.join(claudeConfig, "skills", "agent-login")} alone: it is a folder, not a link`);
+    expect(fs.readlinkSync(path.join(bin, "agent-login"))).toBe(path.join(own, "agent-login"));
+    expect(isSymlink(path.join(claudeConfig, "skills", "agent-login"))).toBe(false);
   });
 
   it("a new data folder without git", async () => {
