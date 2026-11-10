@@ -1,5 +1,5 @@
 // agent-login ships with sous chef as a dependency (docs/domains/agent-login.md): `sc setup`
-// links its command and its skill, and says whether 1Password is set up for it. Setting up
+// links its command and its skill, and says whether 1Password looks set up for it. Setting up
 // 1Password is each person's own step, so nothing here asks for it or fails setup without it.
 
 import fs from "node:fs";
@@ -45,9 +45,11 @@ function setting(env: string | undefined, config: Record<string, unknown>, key: 
 }
 
 /**
- * One line on whether agent-login can sign in yet: a vault chosen and a token file that is not
- * empty, found the way agent-login finds them (its environment variables, then its config file,
- * then its defaults). The token file's size is all that is looked at, never its contents.
+ * One line on whether 1Password looks set up for agent-login: a vault chosen and a token file that
+ * is not empty, found the way agent-login finds them (its environment variables, then its config
+ * file, then its defaults). The token file's size is all that is looked at, never its contents.
+ * agent-login refuses more than this (for example a token file others can read), so the line
+ * never says it works; `agent-login setup` checks the rest.
  */
 export function agentLoginStatus(): string {
   const configFile = expanduser(process.env.AGENT_LOGIN_CONFIG || "~/.config/agent-login/config.json");
@@ -62,8 +64,8 @@ export function agentLoginStatus(): string {
   if (!vault) missing.push("no vault chosen");
   if (!(isFile(tokenFile) && fs.statSync(tokenFile).size > 0)) missing.push(`the token file ${tokenFile} is missing or empty`);
   if (!missing.length) {
-    return "agent-login: 1Password is set up (a vault is chosen and the token file is there); " +
-      "`agent-login setup` checks that it works";
+    return "agent-login: a 1Password vault is chosen and the token file is there; " +
+      "run `agent-login setup` to check that signing in works";
   }
   return `agent-login: not set up for 1Password (${missing.join(", ")}). It is optional: sessions can sign in ` +
     `to websites with it once you have set it up (${AGENT_LOGIN_SETUP_GUIDE}) and run \`agent-login setup\``;

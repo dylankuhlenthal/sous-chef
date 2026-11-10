@@ -21,7 +21,7 @@
 //                 edit the data folder as it edits the core (Claude Code only reads it
 //                 once the folder is trusted)
 //   agent-login   its command in --bin-dir and its skill in Claude Code's skills folder,
-//                 then one line on whether 1Password is set up for it (src/agent-login.ts)
+//                 then one line on whether 1Password looks set up for it (src/agent-login.ts)
 //
 // Running it again is safe: what is already in place is left alone. It refuses a
 // `my` link that points somewhere else, and the old combined layout. Anything already where
@@ -248,7 +248,7 @@ function linkBin(binDir: string, say: (s: string) => void): void {
   }
 }
 
-/** agent-login's command next to `sc`, its skill in Claude Code's skills folder, and whether 1Password is set up. */
+/** agent-login's command next to `sc`, its skill in Claude Code's skills folder, and whether 1Password looks set up. */
 function linkAgentLogin(binDir: string, say: (s: string) => void): void {
   if (!agentLoginInstalled()) {
     say(`agent-login is not installed in ${AGENT_LOGIN_PACKAGE}, so it was not linked; ` +

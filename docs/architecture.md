@@ -112,6 +112,7 @@ These are deliberate PoC shortcuts. Each has a safeguard, and each is something 
 - `docs/domains/memory.md`: memory files, the startup summary, and surviving compaction.
 - `docs/domains/slack.md`: Slack through the messaging relay: config, sending, the slack log and its labels, questions, tags and standing instructions.
 - `docs/domains/context.md`: the context check, which warns sous chef before compaction.
+- `docs/domains/agent-login.md`: agent-login, which ships with sous chef so sessions can sign in to websites: how it is installed, what `sc setup` links, and the 1Password status line.
 - `docs/operations/running.md`: installing, starting, attaching, testing and troubleshooting.
 - `docs/patterns/`: adding a kind, adding a runtime, and the documentation standards.
 - `docs/decisions/`: why it is built this way.

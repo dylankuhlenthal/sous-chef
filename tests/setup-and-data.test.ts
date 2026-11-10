@@ -150,7 +150,7 @@ describe("SetupTests", () => {
     expect(kinds).not.toContain("not found");
   });
 
-  it("agent-login's status says 1Password is set up from its config file, looking only at the token's size", async () => {
+  it("agent-login's status reads its config file, and looks only at the token's size", async () => {
     const config = path.join(userHome, ".config", "agent-login");
     fs.mkdirSync(config, { recursive: true });
     const token = path.join(t.tmp, "token");
@@ -159,7 +159,7 @@ describe("SetupTests", () => {
     expect((await install(["--name", "Sam", "--no-git"])).stdout).toContain(`the token file ${token} is missing or empty`);
     fs.writeFileSync(token, "ops_not-a-real-token\n");
     const out = (await install()).stdout;
-    expect(out).toContain("agent-login: 1Password is set up");
+    expect(out).toContain("agent-login: a 1Password vault is chosen and the token file is there");
     expect(out).not.toContain("ops_not-a-real-token");
     expect((await install([], { env: { AGENT_LOGIN_CONFIG: path.join(t.tmp, "nowhere.json") } })).stdout)
       .toContain("no vault chosen");
@@ -180,6 +180,30 @@ describe("SetupTests", () => {
     expect(out).toContain(`left ${path.join(claudeConfig, "skills", "agent-login")} alone: it is a folder, not a link`);
     expect(fs.readlinkSync(path.join(bin, "agent-login"))).toBe(path.join(own, "agent-login"));
     expect(isSymlink(path.join(claudeConfig, "skills", "agent-login"))).toBe(false);
+  });
+
+  it("a dangling agent-login link is replaced, and a missing agent-login is skipped without failing setup", async () => {
+    fs.mkdirSync(path.join(claudeConfig, "skills"), { recursive: true });
+    const skillLink = path.join(claudeConfig, "skills", "agent-login");
+    fs.symlinkSync(path.join(t.tmp, "moved", "agent-login"), skillLink);
+    const out = (await install(["--name", "Sam", "--no-git"])).stdout;
+    expect(out).toContain(`replaced ${skillLink}`);
+    expect(fs.existsSync(path.join(skillLink, "SKILL.md"))).toBe(true);
+    // The copy's node_modules, without agent-login.
+    const modules = path.join(t.code, "node_modules");
+    const real = fs.realpathSync(modules);
+    fs.unlinkSync(modules);
+    fs.mkdirSync(modules);
+    for (const name of fs.readdirSync(real)) {
+      if (name !== "agent-login") fs.symlinkSync(path.join(real, name), path.join(modules, name));
+    }
+    fs.rmSync(path.join(bin, "agent-login"));
+    fs.rmSync(skillLink);
+    const again = (await install()).stdout;
+    expect(again).toContain(`agent-login is not installed in ${path.join(fs.realpathSync(t.code), "node_modules", "agent-login")}`);
+    expect(again).not.toContain("agent-login: ");
+    expect(fs.existsSync(path.join(bin, "agent-login")) || isSymlink(path.join(bin, "agent-login"))).toBe(false);
+    expect(isSymlink(skillLink)).toBe(false);
   });
 
   it("a new data folder without git", async () => {
