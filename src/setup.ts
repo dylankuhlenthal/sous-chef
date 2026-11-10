@@ -20,18 +20,22 @@
 //                 and .agents/settings.local.json, so a plain `claude` in the core may
 //                 edit the data folder as it edits the core (Claude Code only reads it
 //                 once the folder is trusted)
+//   agent-login   its command in --bin-dir and its skill in Claude Code's skills folder,
+//                 then one line on whether 1Password looks set up for it (src/agent-login.ts)
 //
 // Running it again is safe: what is already in place is left alone. It refuses a
-// `my` link that points somewhere else, and the old combined layout. An `sc` or
-// `souschef` in --bin-dir that is not a link to this core is left alone, with a note.
+// `my` link that points somewhere else, and the old combined layout. Anything already where
+// a link would go (`sc`, `souschef`, agent-login) that is not that link is left alone, with
+// a note.
 
 import fs from "node:fs";
 import path from "node:path";
 import { createInterface, Interface } from "node:readline/promises";
+import { AGENT_LOGIN_PACKAGE, agentLoginInstalled, agentLoginStatus, agentLoginTargets, userSkillsDir } from "./agent-login.js";
 import { print, stdinIsTty } from "./io.js";
 import { run } from "./proc.js";
 import { dumps, JSONDecodeError, loads } from "./pyjson.js";
-import { capitalize, Dict, exists, expanduser, isDict, isSymlink, listDir, pathStr, readText, resolvePath, splitWs, stem, strip } from "./py.js";
+import { capitalize, Dict, exists, expanduser, isDict, isDir, isSymlink, listDir, pathStr, readText, resolvePath, splitWs, stem, strip } from "./py.js";
 import {
   chefPermissionsProblem, CODE_ROOT, DATA_LINK, DEFAULT_CHEF_PERMISSIONS, ownerProblem, SCError, slug, writeJson,
 } from "./util.js";
@@ -194,34 +198,70 @@ export async function chooseChefPermissions(data: string, args: SetupArgs, ask: 
   say(`sous chef's own session will start in permission mode ${mode}`);
 }
 
+interface LinkPlan {
+  target: string;
+  link: string;
+  /** Whose the target is, as in "it points to X, not <whose>". */
+  whose: string;
+  /** How to use the target anyway when something else holds the link's place. */
+  instead: string;
+}
+
+/**
+ * Link `link` to `target`. Something else already there is left alone with a note, except a
+ * link to nothing (a core that moved, say), which is no one's and is replaced.
+ */
+function placeLink(plan: LinkPlan, say: (s: string) => void): void {
+  const { target, link } = plan;
+  fs.mkdirSync(path.dirname(link), { recursive: true });
+  if (isSymlink(link)) {
+    const current = pathStr(fs.readlinkSync(link));
+    if (current === target) return;
+    if (!exists(link)) {
+      fs.unlinkSync(link);
+      fs.symlinkSync(target, link);
+      say(`replaced ${link}, which pointed to ${current}, which no longer exists, with a link to ${target}`);
+      return;
+    }
+    say(`left ${link} alone: it points to ${current}, not ${plan.whose}. To use this one, replace it ` +
+      `(ln -sfn ${target} ${link}), or ${plan.instead}`);
+    return;
+  }
+  if (exists(link)) {
+    const what = isDir(link) ? "a folder" : "a file";
+    say(`left ${link} alone: it is ${what}, not a link; ${plan.instead}, or replace it`);
+    return;
+  }
+  fs.symlinkSync(target, link);
+  say(`linked ${link} -> ${target}`);
+}
+
 function linkBin(binDir: string, say: (s: string) => void): void {
   fs.mkdirSync(binDir, { recursive: true });
   for (const name of ["sc", "souschef"]) {
     const target = path.join(CODE_ROOT, "bin", name);
-    const link = path.join(binDir, name);
-    if (isSymlink(link)) {
-      const current = pathStr(fs.readlinkSync(link));
-      if (current === target) continue;
-      if (!exists(link)) {
-        // A link to nothing (a core that moved, say) is no one's tool: replace it.
-        fs.unlinkSync(link);
-        fs.symlinkSync(target, link);
-        say(`replaced ${link}, which pointed to ${current}, which no longer exists, with a link to ${target}`);
-        continue;
-      }
-      say(`left ${link} alone: it points to ${current}, not this sous chef. To use this one from any ` +
-        `terminal, replace it (ln -sfn ${target} ${link}), or run ${target} by its path`);
-      continue;
-    } else if (exists(link)) {
-      say(`left ${link} alone: it is a file, not a link; run ${target} by its path, or replace it`);
-      continue;
-    }
-    fs.symlinkSync(target, link);
-    say(`linked ${link} -> ${target}`);
+    placeLink({ target, link: path.join(binDir, name), whose: "this sous chef", instead: `run ${target} by its path` },
+      say);
   }
   if (!(process.env.PATH ?? "").split(":").includes(binDir)) {
     say(`note: ${binDir} is not on your PATH; add it so \`sc\` and \`souschef\` work from any terminal`);
   }
+}
+
+/** agent-login's command next to `sc`, its skill in Claude Code's skills folder, and whether 1Password looks set up. */
+function linkAgentLogin(binDir: string, say: (s: string) => void): void {
+  if (!agentLoginInstalled()) {
+    say(`agent-login is not installed in ${AGENT_LOGIN_PACKAGE}, so it was not linked; ` +
+      `run: cd ${CODE_ROOT} && npm ci && npm run build, then setup again`);
+    return;
+  }
+  const { command, skill } = agentLoginTargets();
+  const whose = "the agent-login that ships with sous chef";
+  placeLink({ target: command, link: path.join(binDir, "agent-login"), whose, instead: `run ${command} by its path` },
+    say);
+  placeLink({ target: skill, link: path.join(userSkillsDir(), "agent-login"), whose,
+    instead: "keep the one that is there" }, say);
+  say(agentLoginStatus());
 }
 
 /** Let a plain `claude` in the core edit the data folder without asking (Claude Code's additionalDirectories). */
@@ -327,7 +367,9 @@ async function setup(args: SetupArgs, ask: Asker): Promise<number> {
     fs.symlinkSync(data, DATA_LINK);
     say(`linked ${DATA_LINK} -> ${data}`);
   }
-  linkBin(pathStr(expanduser(args.bin_dir || DEFAULT_BIN)), say);
+  const binDir = pathStr(expanduser(args.bin_dir || DEFAULT_BIN));
+  linkBin(binDir, say);
+  linkAgentLogin(binDir, say);
   allowDataFolder(data);
   say("\nSous chef is installed. Next:\n" +
     "  sc slack setup --help   to reach sous chef from Slack (optional; needs the messaging relay, which is not published)\n" +

@@ -17,7 +17,7 @@ const ROOT = fs.realpathSync(path.resolve(import.meta.dirname, ".."));
 export const CORE_PATHS = [
   "bin/", "docs/", "tests/", "templates/", ".agents/",
   "kinds/general.md", "kinds/investigate.md",
-  "AGENTS.md", "CLAUDE.md", ".claude", ".gitignore", "README.md", "install.sh",
+  "AGENTS.md", "CLAUDE.md", ".claude", ".gitignore", ".npmrc", "README.md", "install.sh",
   "src/", "package.json", "package-lock.json", "tsconfig.json", "tsconfig.build.json", "eslint.config.js",
   "vitest.config.ts", "scripts/", "LICENSE", "SECURITY.md", "CONTRIBUTING.md", ".github/", "assets/",
 ] as const;

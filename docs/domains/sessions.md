@@ -212,7 +212,7 @@ A spawned session runs with the owner's own Claude Code setup: skills, MCP serve
 - **Skills**: the owner's user-level skills (for the first owner, `~/.claude/skills` points at `~/.agents/skills`), skills synced from claude.ai, and the project skills of the folder the session works in. Which of these a spawn checks, and where: "Where Claude Code reads skills from" below.
 - **MCP servers**: the owner's are available.
 - **Instructions**: the owner's global `~/.claude/CLAUDE.md`, plus any `CLAUDE.md` or `AGENTS.md` in the repo the session works in, plus the owner's `my/worker-instructions.md` through its brief ("The brief" above). The `--settings` sous chef passes at launch adds the session's hooks; it does not replace the owner's own settings.
-- **Tools**: whatever is on the owner's PATH.
+- **Tools**: whatever is on the owner's PATH, which includes agent-login and its skill once `sc setup` has linked them (`docs/domains/agent-login.md`).
 - **Permission mode**: the kind's, unless `sc spawn --permissions` chose another, and `auto` when neither sets one (see "Permissions" above).
 
 So a kind can tell a session to run a skill. It declares it in its `skill` field, which `sc spawn` checks ("Skills" above); for anything the check cannot see, the brief tells the session to report `blocked`.
