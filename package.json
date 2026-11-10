@@ -20,7 +20,7 @@
   },
   "dependencies": {
     "@dylankuhlenthal/porch": "^0.2.0",
-    "agent-login": "github:dylankuhlenthal/agent-login#c5748403c0305cbef3ddc05b95f7caefeb3da06e",
+    "agent-login": "github:dylankuhlenthal/agent-login#51e857d5ced856874d4fef5586e049eb29ed78b8",
     "proper-lockfile": "^4.1.2"
   },
   "devDependencies": {
@@ -33,6 +33,6 @@
     "vitest": "^5.0.2"
   },
   "allowScripts": {
-    "github:dylankuhlenthal/agent-login#c5748403c0305cbef3ddc05b95f7caefeb3da06e": true
+    "github:dylankuhlenthal/agent-login#51e857d5ced856874d4fef5586e049eb29ed78b8": true
   }
 }
